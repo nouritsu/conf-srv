@@ -5,6 +5,8 @@
         enable = true;
         openFirewall = true;
         allowSFTP = true;
+        # only the keys declared here, none added to ~/.ssh/authorized_keys
+        authorizedKeysInHomedir = false;
         settings = {
           PasswordAuthentication = false;
           PubkeyAuthentication = true;
