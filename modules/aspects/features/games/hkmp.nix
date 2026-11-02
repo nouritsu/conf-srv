@@ -4,7 +4,7 @@ in {
   # hollow knight multiplayer
   den.aspects.games.hkmp.nixos = {
     virtualisation.oci-containers.containers.hkmp = {
-      image = "maximalmax90/hkmpserver:latest@sha256:162c4da5afefe9e9401da9608dbda5782555216721e4e9ad49e8c0d1a9ec097c";
+      image = "maximalmax90/hkmpserver:latest@sha256:9d5e68e21564a258578d17802a5e0bc6e86f8cf731e295f0b5371e9a63e1e5b6";
       ports = ["${toString port}:${toString port}/udp"];
       environment.PORT = toString port;
       volumes = ["/data/hkmp:/HKMP"];
