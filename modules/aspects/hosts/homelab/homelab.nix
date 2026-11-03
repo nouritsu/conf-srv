@@ -36,6 +36,7 @@
       services.mousehole
       services.sabnzbd
       services.radicale
+      services.atuin
     ];
 
     nixos = {pkgs, ...}: {
