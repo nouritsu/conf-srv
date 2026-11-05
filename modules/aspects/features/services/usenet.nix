@@ -12,7 +12,7 @@ in {
       imports = [(den.lib.homelab.via-gluetun "sabnzbd")];
 
       virtualisation.oci-containers.containers.sabnzbd = {
-        image = "lscr.io/linuxserver/sabnzbd:latest@sha256:3ac1c9ea03bafa2588dd8acdcb809857bae305e71d2d90e11d689c78076a9c01";
+        image = "lscr.io/linuxserver/sabnzbd:latest@sha256:693c208f697d0b411410edd92a98b52c8c754c01f5c078a975cbc892044260f5";
 
         environment = {
           DOCKER_MODS = "ghcr.io/themepark-dev/theme.park:sabnzbd";
