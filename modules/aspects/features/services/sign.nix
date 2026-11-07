@@ -71,7 +71,7 @@ in {
       };
 
       virtualisation.oci-containers.containers.documenso-db = {
-        image = "postgres:15@sha256:baa22e6286bf832cb147b8bb5aa9d8bc999846d69c21d11bf63f58fbeed1fa48";
+        image = "postgres:15@sha256:1aac5b49cefd627f02816141ca4ad012d6cc19460dfe02a9b5168a105be3fc53";
         environment = {
           POSTGRES_USER = "documenso";
           POSTGRES_DB = "documenso";
