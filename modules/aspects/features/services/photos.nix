@@ -7,6 +7,11 @@
       inherit port;
     };
     backup.paths = ["/var/lib/containers/storage/volumes/immich-db"];
+    # regenerated from the originals
+    backup.exclude = [
+      "/data/immich/upload/thumbs"
+      "/data/immich/upload/encoded-video"
+    ];
 
     nixos = {config, ...}: {
       sops.secrets."photos/postgres-password" = {};
@@ -30,12 +35,19 @@
       };
 
       virtualisation.oci-containers.containers.immich-server = {
-        image = "ghcr.io/immich-app/immich-server:release@sha256:485d546a2e31d6a8b4db8423fcba5c109de8c218d93410af115fd1ccfc4352a6";
+        # the pc's cuda machine learning (conf-nixos) runs this same release
+        image = "ghcr.io/immich-app/immich-server:v3.3.6@sha256:e1981983b1c13f6024b57d72e7ecae3342eed1581201ab09fb248932d86c593a";
         dependsOn = ["immich-redis" "immich-db"];
         ports = ["${toString port}:2283"];
+        # only the fallback: the admin settings list http://pc:3003 ahead of it
         environment.IMMICH_MACHINE_LEARNING_URL = "http://immich-ml:3003";
         environmentFiles = [config.sops.templates."immich.env".path];
-        volumes = ["/data/immich/upload:/data" "/etc/localtime:/etc/localtime:ro"];
+        volumes = [
+          "/data/immich/upload:/data"
+          # the desktops' pictures, an external library
+          "/data/sync/pictures:/external/pictures:ro"
+          "/etc/localtime:/etc/localtime:ro"
+        ];
         extraOptions = [
           "--device=/dev/dri:/dev/dri"
           "--add-host=immich-db:host-gateway"
@@ -45,7 +57,7 @@
       };
 
       virtualisation.oci-containers.containers.immich-ml = {
-        image = "ghcr.io/immich-app/immich-machine-learning:release@sha256:5b28c9352c8374b8a1ed96fbdd8d6755fea6e43510ec43fdf6538aa02ea40f56";
+        image = "ghcr.io/immich-app/immich-machine-learning:v3.3.6@sha256:14367bfb374b8576ddf49abd67c5ca0190a4c7fcf6303cdad65d7f7bf1a50bc2";
         ports = ["3003:3003"];
         volumes = ["immich-ml-cache:/cache"];
         environmentFiles = [config.sops.templates."immich.env".path];

@@ -37,6 +37,7 @@
       services.sabnzbd
       services.radicale
       services.atuin
+      services.immich
     ];
 
     nixos = {pkgs, ...}: {
