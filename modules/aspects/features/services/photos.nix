@@ -1,4 +1,4 @@
-{
+{den, ...}: {
   den.aspects.services.immich = let
     port = 2283;
   in {
@@ -14,6 +14,8 @@
     ];
 
     nixos = {config, ...}: {
+      imports = [(den.lib.homelab.private-network "immich" ["immich-server" "immich-ml" "immich-redis" "immich-db"])];
+
       sops.secrets."photos/postgres-password" = {};
 
       sops.templates."immich.env" = {
@@ -38,7 +40,7 @@
         # the pc's cuda machine learning (conf-nixos) runs this same release
         image = "ghcr.io/immich-app/immich-server:v3.3.6@sha256:e1981983b1c13f6024b57d72e7ecae3342eed1581201ab09fb248932d86c593a";
         dependsOn = ["immich-redis" "immich-db"];
-        ports = ["${toString port}:2283"];
+        ports = ["127.0.0.1:${toString port}:2283"];
         # only the fallback: the admin settings list http://pc:3003 ahead of it
         environment.IMMICH_MACHINE_LEARNING_URL = "http://immich-ml:3003";
         environmentFiles = [config.sops.templates."immich.env".path];
@@ -48,24 +50,17 @@
           "/data/sync/pictures:/external/pictures:ro"
           "/etc/localtime:/etc/localtime:ro"
         ];
-        extraOptions = [
-          "--device=/dev/dri:/dev/dri"
-          "--add-host=immich-db:host-gateway"
-          "--add-host=immich-redis:host-gateway"
-          "--add-host=immich-ml:host-gateway"
-        ];
+        extraOptions = ["--device=/dev/dri:/dev/dri"];
       };
 
       virtualisation.oci-containers.containers.immich-ml = {
         image = "ghcr.io/immich-app/immich-machine-learning:v3.3.6@sha256:14367bfb374b8576ddf49abd67c5ca0190a4c7fcf6303cdad65d7f7bf1a50bc2";
-        ports = ["3003:3003"];
         volumes = ["immich-ml-cache:/cache"];
         environmentFiles = [config.sops.templates."immich.env".path];
       };
 
       virtualisation.oci-containers.containers.immich-redis = {
         image = "docker.io/valkey/valkey:9@sha256:418652cfb58ef879d4978c33553735d7147016032d5aefaa14c828e611eb9dfd";
-        ports = ["6379:6379"];
         extraOptions = [
           "--health-cmd=redis-cli ping || exit 1"
           "--health-interval=10s"
@@ -84,7 +79,6 @@
         };
         environmentFiles = [config.sops.templates."immich-postgres.env".path];
         volumes = ["immich-db:/var/lib/postgresql/data"];
-        ports = ["5434:5434"];
         extraOptions = [
           "--shm-size=128m"
           "--health-cmd=pg_isready -U immich -p 5434"

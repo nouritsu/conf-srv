@@ -44,5 +44,42 @@
         wantedBy = ["podman-gluetun.service"];
       };
     };
+
+    # Put containers on a podman network of their own, where they reach each
+    # other by container name. Podman's published ports skip nixos-fw, so a
+    # port only caddy or rathole needs is published on 127.0.0.1.
+    private-network = network: names: {config, ...}: let
+      podman = lib.getExe config.virtualisation.podman.package;
+      unit = "podman-network-${network}";
+      # pihole holds 53 on every address; netavark forwards the containers'
+      # 53 to aardvark-dns here
+      dns-port = 1053;
+    in {
+      virtualisation.containers.containersConf.settings.network.dns_bind_port = dns-port;
+      networking.firewall.interfaces."podman+" = {
+        allowedUDPPorts = [dns-port];
+        allowedTCPPorts = [dns-port];
+      };
+
+      virtualisation.oci-containers.containers = lib.genAttrs names (_: {
+        networks = [network];
+      });
+
+      systemd.services =
+        {
+          ${unit} = {
+            description = "Podman network ${network}";
+            serviceConfig = {
+              Type = "oneshot";
+              RemainAfterExit = true;
+            };
+            script = "${podman} network exists ${network} || ${podman} network create ${network}";
+          };
+        }
+        // lib.genAttrs (map (name: "podman-${name}") names) (_: {
+          requires = ["${unit}.service"];
+          after = ["${unit}.service"];
+        });
+    };
   };
 }

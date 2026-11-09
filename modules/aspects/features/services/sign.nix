@@ -13,6 +13,8 @@ in {
     backup.paths = ["/var/lib/containers/storage/volumes/documenso-db"];
 
     nixos = {config, ...}: {
+      imports = [(den.lib.homelab.private-network "documenso" ["documenso" "documenso-db"])];
+
       sops.secrets."documenso-cert" = {
         sopsFile = ../secrets/cert.p12.enc;
         format = "binary";
@@ -36,8 +38,8 @@ in {
           NEXT_PRIVATE_SMTP_USERNAME=${config.sops.placeholder."mail/home-mail"}
           NEXT_PRIVATE_SMTP_FROM_ADDRESS=${config.sops.placeholder."sign/sign-mail"}
           NEXT_PRIVATE_SMTP_PASSWORD=${config.sops.placeholder."mail/home-password"}
-          NEXT_PRIVATE_DATABASE_URL=postgresql://documenso:${config.sops.placeholder."sign/postgres-password"}@documenso-db:5433/documenso
-          NEXT_PRIVATE_DIRECT_DATABASE_URL=postgresql://documenso:${config.sops.placeholder."sign/postgres-password"}@documenso-db:5433/documenso
+          NEXT_PRIVATE_DATABASE_URL=postgresql://documenso:${config.sops.placeholder."sign/postgres-password"}@documenso-db:5432/documenso
+          NEXT_PRIVATE_DIRECT_DATABASE_URL=postgresql://documenso:${config.sops.placeholder."sign/postgres-password"}@documenso-db:5432/documenso
         '';
       };
 
@@ -50,7 +52,7 @@ in {
       virtualisation.oci-containers.containers.documenso = {
         image = "documenso/documenso:latest@sha256:d9985f66c19c59128f64b1439f057683da0110deb0e518655b97f06e3141f173";
         dependsOn = ["documenso-db"];
-        ports = ["${toString port}:3000"];
+        ports = ["127.0.0.1:${toString port}:3000"];
         environment = {
           NEXT_PRIVATE_SMTP_HOST = smtp.host;
           NEXT_PRIVATE_SMTP_PORT = toString smtp.port;
@@ -67,7 +69,6 @@ in {
         };
         environmentFiles = [config.sops.templates."documenso.env".path];
         volumes = ["${config.sops.secrets."documenso-cert".path}:/opt/documenso/cert.p12:ro"];
-        extraOptions = ["--add-host=documenso-db:host-gateway"];
       };
 
       virtualisation.oci-containers.containers.documenso-db = {
@@ -78,7 +79,6 @@ in {
         };
         environmentFiles = [config.sops.templates."documenso-postgres.env".path];
         volumes = ["documenso-db:/var/lib/postgresql/data"];
-        ports = ["5433:5432"];
         extraOptions = [
           "--health-cmd=pg_isready -U documenso"
           "--health-interval=10s"
