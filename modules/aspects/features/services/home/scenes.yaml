@@ -1,0 +1,35 @@
+# ids are the ui scenes' they replaced, so entity ids and labels carry over
+- id: "1772416680089"
+  name: Night
+  icon: mdi:lightbulb-night
+  entities:
+    light.bed_light:
+      state: "on"
+      brightness: 26
+      color_mode: hs
+      hs_color: [277, 41]
+    light.table_light:
+      state: "on"
+      brightness: 26
+      color_mode: hs
+      hs_color: [277, 41]
+
+- id: "1772416876706"
+  name: Day
+  icon: mdi:lightbulb
+  entities:
+    light.bed_light:
+      state: "on"
+      brightness: 255
+      color_mode: color_temp
+      color_temp_kelvin: 2500
+    light.table_light:
+      state: "on"
+      brightness: 255
+      color_mode: color_temp
+      color_temp_kelvin: 2500
+    light.tv_stand_lamp:
+      state: "on"
+      brightness: 255
+      color_mode: color_temp
+      color_temp_kelvin: 2500
