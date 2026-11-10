@@ -1,27 +1,23 @@
 {
+  # the ssd's led stays off; set once at boot, it holds until power is lost
   den.aspects.services.openrgb.nixos = {
     pkgs,
     lib,
     ...
-  }: let
-    openrgb = lib.getExe pkgs.openrgb;
-  in {
-    environment.systemPackages = [pkgs.openrgb];
-    services.udev.packages = [pkgs.openrgb];
-
-    systemd.services.openrgb-server = {
-      description = "OpenRGB SDK Server";
+  }: {
+    systemd.services.openrgb-off = {
+      description = "Switch the SSD's LED off";
       wantedBy = ["multi-user.target"];
-      after = ["network.target"];
       serviceConfig = {
-        ExecStart = "${openrgb} --server --server-port 6742";
-        Restart = "on-failure";
-        RestartSec = 5;
+        Type = "oneshot";
+        RemainAfterExit = true;
+        ExecStart = "${lib.getExe pkgs.openrgb} --noautoconnect --mode off";
       };
     };
 
-    boot.kernelModules = ["i2c-dev"];
+    # root needs no rules, but openrgb warns on every run without them
+    services.udev.packages = [pkgs.openrgb];
 
-    networking.firewall.allowedTCPPorts = [6742];
+    boot.kernelModules = ["i2c-dev"];
   };
 }
