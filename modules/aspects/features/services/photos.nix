@@ -1,6 +1,8 @@
 {den, ...}: {
   den.aspects.services.immich = let
     port = 2283;
+    # the pc's cuda machine learning (conf-nixos); nothing here runs models
+    ml-url = "http://pc:3003";
   in {
     endpoint = {
       subdomain = "photos";
@@ -13,10 +15,21 @@
       "/data/immich/upload/encoded-video"
     ];
 
-    nixos = {config, ...}: {
-      imports = [(den.lib.homelab.private-network "immich" ["immich-server" "immich-ml" "immich-redis" "immich-db"])];
+    nixos = {
+      config,
+      lib,
+      pkgs,
+      ...
+    }: let
+      sequencer = pkgs.writers.writePython3Bin "immich-ml-sequencer" {
+        flakeIgnore = ["E501"];
+      } (builtins.readFile ./immich-ml-sequencer.py);
+    in {
+      imports = [(den.lib.homelab.private-network "immich" ["immich-server" "immich-redis" "immich-db"])];
 
       sops.secrets."photos/postgres-password" = {};
+      # an admin's key with only queue.read and queue.update
+      sops.secrets."photos/sequencer-api-key" = {};
 
       sops.templates."immich.env" = {
         content = ''
@@ -41,8 +54,8 @@
         image = "ghcr.io/immich-app/immich-server:v3.3.6@sha256:e1981983b1c13f6024b57d72e7ecae3342eed1581201ab09fb248932d86c593a";
         dependsOn = ["immich-redis" "immich-db"];
         ports = ["127.0.0.1:${toString port}:2283"];
-        # only the fallback: the admin settings list http://pc:3003 ahead of it
-        environment.IMMICH_MACHINE_LEARNING_URL = "http://immich-ml:3003";
+        # only the default: the admin settings' url list wins, and must hold just this too
+        environment.IMMICH_MACHINE_LEARNING_URL = ml-url;
         environmentFiles = [config.sops.templates."immich.env".path];
         volumes = [
           "/data/immich/upload:/data"
@@ -51,12 +64,6 @@
           "/etc/localtime:/etc/localtime:ro"
         ];
         extraOptions = ["--device=/dev/dri:/dev/dri"];
-      };
-
-      virtualisation.oci-containers.containers.immich-ml = {
-        image = "ghcr.io/immich-app/immich-machine-learning:v3.3.6@sha256:14367bfb374b8576ddf49abd67c5ca0190a4c7fcf6303cdad65d7f7bf1a50bc2";
-        volumes = ["immich-ml-cache:/cache"];
-        environmentFiles = [config.sops.templates."immich.env".path];
       };
 
       virtualisation.oci-containers.containers.immich-redis = {
@@ -89,6 +96,30 @@
       };
 
       systemd.timers.restart-container-immich-db.enable = false; # database
+
+      # while the pc is off its queues pause, so jobs wait for it instead of failing
+      systemd.services.immich-ml-sequencer = {
+        description = "Run Immich's machine-learning queues one at a time while the pc is up";
+        wantedBy = ["multi-user.target"];
+        wants = ["network-online.target"];
+        after = ["network-online.target" "podman-immich-server.service"];
+
+        serviceConfig = {
+          ExecStart = "${lib.getExe sequencer} --immich http://127.0.0.1:${toString port} --ml ${ml-url}";
+          DynamicUser = true;
+          LoadCredential = ["api-key:${config.sops.secrets."photos/sequencer-api-key".path}"];
+
+          Restart = "always";
+          RestartSec = "1min";
+
+          ProtectSystem = "strict";
+          ProtectHome = true;
+          PrivateTmp = true;
+          PrivateDevices = true;
+          NoNewPrivileges = true;
+          RestrictAddressFamilies = ["AF_INET" "AF_INET6" "AF_UNIX"];
+        };
+      };
 
       systemd.tmpfiles.rules = [
         "d /data/immich 0775 1000 data -"
