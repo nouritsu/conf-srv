@@ -10,7 +10,7 @@
 
     nixos = {pkgs, ...}: {
       virtualisation.oci-containers.containers.home-assistant = {
-        image = "lscr.io/linuxserver/homeassistant:latest@sha256:6e6257d3a396177d17834bb1fea6226c62380ffab77047a0bb3e325b5421a74b";
+        image = "lscr.io/linuxserver/homeassistant:latest@sha256:2796670c10ff4c378adc7d3553e4fffe54856d794bad33fdd41313190ee1a46e";
         # no ports: --net=host publishes nothing, podman discards them
         # podman's default 10 s killed hass mid-shutdown; 90 s stays under systemd's 2 min
         extraOptions = ["--net=host" "--cap-add=NET_ADMIN" "--cap-add=NET_RAW" "--stop-timeout=90"];
