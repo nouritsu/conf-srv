@@ -66,3 +66,25 @@
         - action: scene.delete
           target:
             entity_id: scene.before_tv
+
+# moonfin opens when the stick wakes onto arc launcher, its home screen; any other app it wakes into stays
+- id: "moonfin_on_wake"
+  alias: Moonfin on wake
+  description: Opens Moonfin when the TV stick wakes onto its home screen
+  mode: single
+  triggers:
+    - trigger: state
+      entity_id: media_player.bedroom_tv
+      from: ["off", unavailable]
+      to: "on"
+  actions:
+    # the current app is reported just after the stick comes on
+    - delay: "00:00:02"
+    - condition: template
+      value_template: "{{ state_attr('media_player.bedroom_tv', 'app_id') == 'com.omeda.arc' }}"
+    - action: media_player.play_media
+      target:
+        entity_id: media_player.bedroom_tv
+      data:
+        media_content_type: app
+        media_content_id: org.moonfin.androidtv
