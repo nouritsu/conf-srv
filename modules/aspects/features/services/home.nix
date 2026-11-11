@@ -36,6 +36,7 @@
       # copied, not mounted: the image chowns /config on start, which fails on the store
       systemd.services.podman-home-assistant.preStart = ''
         install -m 0444 -o 1000 -g data ${./home/configuration.yaml} /data/homeassistant/configuration.yaml
+        install -m 0444 -o 1000 -g data ${./home/automations.yaml} /data/homeassistant/nix/automations.yaml
         install -m 0444 -o 1000 -g data ${./home/scenes.yaml} /data/homeassistant/nix/scenes.yaml
       '';
 

@@ -1,0 +1,68 @@
+# the lamps follow what the stick's jellyfin clients play; scene.before_tv holds the room from before and exists only while engaged
+- id: "lights_follow_the_tv"
+  alias: Lights follow the TV
+  description: TV lamp low while playing, lamps at 40% while paused, the room as it was once playback stops
+  mode: queued
+  trigger_variables:
+    players: [media_player.bedroom_tv_jellyfin, media_player.bedroom_tv_moonfin]
+  triggers:
+    - trigger: template
+      value_template: "{{ players | select('is_state', 'playing') | list | count > 0 }}"
+      id: playing
+    - trigger: template
+      value_template: "{{ players | select('is_state', 'playing') | list | count == 0 and players | select('is_state', 'paused') | list | count > 0 }}"
+      for: "00:00:02"
+      id: paused
+    - trigger: template
+      value_template: "{{ players | select('is_state', ['playing', 'paused']) | list | count == 0 }}"
+      for: "00:00:03"
+      id: stopped
+  actions:
+    # a session starts only if a lamp is already on, so daytime viewing is left alone
+    - if:
+        - condition: trigger
+          id: playing
+        - condition: template
+          value_template: "{{ states.scene.before_tv is none }}"
+        - condition: state
+          entity_id: [light.bed_light, light.table_light, light.tv_stand_lamp]
+          match: any
+          state: "on"
+      then:
+        - action: scene.create
+          data:
+            scene_id: before_tv
+            snapshot_entities: [light.bed_light, light.table_light, light.tv_stand_lamp]
+    - condition: template
+      value_template: "{{ states.scene.before_tv is not none }}"
+    - choose:
+        - conditions:
+            - condition: trigger
+              id: playing
+          sequence:
+            - action: light.turn_on
+              target:
+                entity_id: light.tv_stand_lamp
+              data:
+                brightness_pct: 15
+                color_temp_kelvin: 2500
+            - action: light.turn_off
+              target:
+                entity_id: [light.bed_light, light.table_light]
+        - conditions:
+            - condition: trigger
+              id: paused
+          sequence:
+            - action: light.turn_on
+              target:
+                entity_id: [light.bed_light, light.table_light, light.tv_stand_lamp]
+              data:
+                brightness_pct: 40
+                color_temp_kelvin: 2500
+      default:
+        - action: scene.turn_on
+          target:
+            entity_id: scene.before_tv
+        - action: scene.delete
+          target:
+            entity_id: scene.before_tv

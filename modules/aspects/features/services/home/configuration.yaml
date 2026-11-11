@@ -7,6 +7,7 @@ frontend:
 automation: !include automations.yaml
 script: !include scripts.yaml
 scene: !include scenes.yaml
+automation nix: !include nix/automations.yaml
 scene nix: !include nix/scenes.yaml
 
 http:
