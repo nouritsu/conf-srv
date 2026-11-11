@@ -8,7 +8,7 @@
       inherit port;
     };
 
-    nixos = {
+    nixos = {pkgs, ...}: {
       virtualisation.oci-containers.containers.home-assistant = {
         image = "lscr.io/linuxserver/homeassistant:latest@sha256:6e6257d3a396177d17834bb1fea6226c62380ffab77047a0bb3e325b5421a74b";
         # no ports: --net=host publishes nothing, podman discards them
@@ -34,10 +34,25 @@
       ];
 
       # copied, not mounted: the image chowns /config on start, which fails on the store
-      systemd.services.podman-home-assistant.preStart = ''
+      systemd.services.podman-home-assistant.preStart = let
+        tapo = "/data/homeassistant/custom_components/tapo";
+        patch = "${pkgs.gnupatch}/bin/patch -s -f -p1 --no-backup-if-mismatch -d ${tapo}";
+        one-request = ./home/tapo-one-request.patch;
+      in ''
         install -m 0444 -o 1000 -g data ${./home/configuration.yaml} /data/homeassistant/configuration.yaml
         install -m 0444 -o 1000 -g data ${./home/automations.yaml} /data/homeassistant/nix/automations.yaml
         install -m 0444 -o 1000 -g data ${./home/scenes.yaml} /data/homeassistant/nix/scenes.yaml
+
+        # hacs owns the tapo integration, which sends power, colour and brightness as three steps; patched it sends one
+        if [ -f ${tapo}/light.py ]; then
+          if ${patch} -R --dry-run < ${one-request} > /dev/null; then
+            :
+          elif ${patch} --dry-run < ${one-request} > /dev/null; then
+            ${patch} < ${one-request} && echo "tapo: one-request patch applied"
+          else
+            echo "tapo: light.py changed upstream, one-request patch skipped"
+          fi
+        fi
       '';
 
       systemd.timers.restart-container-home-assistant.enable = false; # database
