@@ -1,6 +1,6 @@
 {den, ...}: {
   den.aspects.services.homeassistant = let
-    inherit (den.lib.homelab) lan-interface;
+    inherit (den.lib.homelab) lan-interface lan-cidr;
     port = 8123;
   in {
     endpoint = {
@@ -17,8 +17,16 @@
         volumes = ["/data/homeassistant:/config" "/run/dbus:/run/dbus:ro" "/proc:/host/proc:ro"];
       };
 
-      # --net=host skips podman's own rules, so the lan needs the port opened
-      networking.firewall.interfaces.${lan-interface}.allowedTCPPorts = [port];
+      # --net=host skips podman's own rules; sonos pushes events to 1400, mdns and ssdp find devices
+      networking.firewall.interfaces.${lan-interface} = {
+        allowedTCPPorts = [port 1400];
+        allowedUDPPorts = [5353 1900];
+      };
+
+      # ssdp replies come from 1900 to whatever port hass searched from; sonos discovery only uses them
+      networking.firewall.extraCommands = ''
+        iptables -A nixos-fw -i ${lan-interface} -s ${lan-cidr} -p udp --sport 1900 -j nixos-fw-accept
+      '';
 
       systemd.tmpfiles.rules = [
         "d /data/homeassistant 0775 1000 data -"
