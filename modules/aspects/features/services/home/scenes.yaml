@@ -13,6 +13,11 @@
       brightness: 26
       color_mode: hs
       hs_color: [277, 41]
+    light.tv_stand_lamp:
+      state: "on"
+      brightness: 26
+      color_mode: hs
+      hs_color: [277, 41]
 
 - id: "1772416876706"
   name: Day
