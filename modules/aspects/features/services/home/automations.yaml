@@ -11,11 +11,9 @@
       id: playing
     - trigger: template
       value_template: "{{ players | select('is_state', 'playing') | list | count == 0 and players | select('is_state', 'paused') | list | count > 0 }}"
-      for: "00:00:02"
       id: paused
     - trigger: template
       value_template: "{{ players | select('is_state', ['playing', 'paused']) | list | count == 0 }}"
-      for: "00:00:03"
       id: stopped
   actions:
     # a session starts only if a lamp is already on, so daytime viewing is left alone
@@ -35,6 +33,20 @@
             snapshot_entities: [light.bed_light, light.table_light, light.tv_stand_lamp]
     - condition: template
       value_template: "{{ states.scene.before_tv is not none }}"
+    # lamps switched off by hand stay off: no 40%, no 15%, and nothing restored
+    - if:
+        - condition: state
+          entity_id: [light.bed_light, light.table_light, light.tv_stand_lamp]
+          state: "off"
+      then:
+        - if:
+            - condition: trigger
+              id: stopped
+          then:
+            - action: scene.delete
+              target:
+                entity_id: scene.before_tv
+        - stop: The lamps are off
     - choose:
         - conditions:
             - condition: trigger
