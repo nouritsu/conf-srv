@@ -24,12 +24,17 @@
       sequencer = pkgs.writers.writePython3Bin "immich-ml-sequencer" {
         flakeIgnore = ["E501"];
       } (builtins.readFile ./immich-ml-sequencer.py);
+      stacker = pkgs.writers.writePython3Bin "immich-pixel-stacker" {
+        flakeIgnore = ["E501"];
+      } (builtins.readFile ./immich-pixel-stacker.py);
     in {
       imports = [(den.lib.homelab.private-network "immich" ["immich-server" "immich-redis" "immich-db"])];
 
       sops.secrets."photos/postgres-password" = {};
       # an admin's key with only queue.read and queue.update
       sops.secrets."photos/sequencer-api-key" = {};
+      # the phone's owner's key with only user.read, asset.read and stack.create
+      sops.secrets."photos/stacker-api-key" = {};
 
       sops.templates."immich.env" = {
         content = ''
@@ -118,6 +123,34 @@
           PrivateDevices = true;
           NoNewPrivileges = true;
           RestrictAddressFamilies = ["AF_INET" "AF_INET6" "AF_UNIX"];
+        };
+      };
+
+      # the pixel saves raw, long exposure and video boost shots as several files
+      systemd.services.immich-pixel-stacker = {
+        description = "Stack the Pixel camera's files for one shot in Immich";
+        after = ["podman-immich-server.service"];
+
+        serviceConfig = {
+          Type = "oneshot";
+          ExecStart = "${lib.getExe stacker} --immich http://127.0.0.1:${toString port}";
+          DynamicUser = true;
+          LoadCredential = ["api-key:${config.sops.secrets."photos/stacker-api-key".path}"];
+
+          ProtectSystem = "strict";
+          ProtectHome = true;
+          PrivateTmp = true;
+          PrivateDevices = true;
+          NoNewPrivileges = true;
+          RestrictAddressFamilies = ["AF_INET" "AF_INET6"];
+        };
+      };
+
+      systemd.timers.immich-pixel-stacker = {
+        wantedBy = ["timers.target"];
+        timerConfig = {
+          OnCalendar = "*:0/15";
+          Persistent = true;
         };
       };
 
