@@ -26,7 +26,7 @@ in {
     users.groups.valheim.gid = uid;
 
     virtualisation.oci-containers.containers.valheim = {
-      image = "lloesche/valheim-server:latest@sha256:fde7829b12d39203e155b6209689b70234f8a27d12c4d48baf890cc2ae2c2df3";
+      image = "lloesche/valheim-server:latest@sha256:bbda47cbbc9fd7b0385803ba0a70ba2084df4cb87ec6170a145aec5df06be07e";
 
       ports = [
         "2456:2456/udp"
