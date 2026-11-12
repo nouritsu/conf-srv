@@ -1,7 +1,7 @@
 # Quirks are den's mechanism for one aspect emitting structured data that other
 # aspects aggregate, without either side knowing the other exists. A service
-# declares what it needs; caddy, pihole, rathole and gluetun each read the whole
-# pool and build their own config from it.
+# declares what it needs; caddy, pihole, rathole, gluetun and gatus each read the
+# whole pool and build their own config from it.
 {
   den.quirks.endpoint.description = ''
     A service reachable through caddy. { subdomain | domain, port ?, extraConfig ?, public ? false, vhost ? true } -
@@ -14,6 +14,11 @@
   den.quirks.tunnel.description = ''
     Another host's public endpoints, collected onto the host whose rathole
     server and caddy publish them. Same shape as `endpoint`.
+  '';
+
+  den.quirks.remote-endpoint.description = ''
+    Every other live host's public endpoints, collected onto the host whose
+    gatus checks them. Same shape as `endpoint`.
   '';
 
   den.quirks.gluetun-ports.description = ''

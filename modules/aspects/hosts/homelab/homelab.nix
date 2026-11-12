@@ -17,6 +17,7 @@
       # services
       services.openrgb
       services.beszel
+      services.gatus
       services.copyparty
       services.bindery
       services.bazarr
