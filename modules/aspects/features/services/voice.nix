@@ -47,7 +47,7 @@
       # speech to text for a closed set of phrases: the names Home Assistant
       # exposes to Assist and the sentences its automations trigger on, which
       # it reads with this token. It trains at start for each language an
-      # assistant uses, and every 10 minutes looks again, retraining only if
+      # assistant uses, and every 2 minutes looks again, retraining only if
       # a name, sentence or language changed. Fast on a Pi where whisper
       # takes seconds. nixpkgs has no module for it, and the homelab's
       # nixpkgs no package
@@ -61,15 +61,23 @@
         environmentFiles = [config.sops.templates."speech-to-phrase.env".path];
         # the image's run.sh passes these on; a later --uri overrides its own
         entrypoint = "bash";
+        # Home Assistant answers on its websocket before it has loaded the
+        # automations whose sentences this learns, and training then would
+        # leave them out; it waits until Home Assistant says it is running
         cmd = [
           "-c"
           ''
+            until /usr/src/.venv/bin/python3 -c '
+            import json, os, urllib.request as r
+            q = r.Request("http://127.0.0.1:8123/api/config", headers={"Authorization": "Bearer " + os.environ["HASS_TOKEN"]})
+            raise SystemExit(json.load(r.urlopen(q, timeout=5)).get("state") != "RUNNING")
+            ' 2>/dev/null; do sleep 5; done
             exec bash /run.sh \
               --uri tcp://127.0.0.1:${toString speech-to-phrase-port} \
               --hass-websocket-uri ws://127.0.0.1:8123/api/websocket \
               --hass-token "$HASS_TOKEN" \
               --retrain-on-start \
-              --retrain-seconds 600
+              --retrain-seconds 120
           ''
         ];
         volumes = ["/data/speech-to-phrase/models:/models" "/data/speech-to-phrase/train:/train"];
