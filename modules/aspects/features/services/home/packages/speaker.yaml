@@ -129,8 +129,8 @@ automation:
               entity_id: [light.bed_light, light.table_light, light.tv_stand_lamp]
 
   # the destinations lose "Bremen " and anything in brackets, "Bf Burg" is
-  # "Burg station" and Hbf "main station", so "Bremen Hbf", "Bf Burg" and
-  # "Verden(Aller)" read well
+  # "Burg station", Hbf "main station" and a slash a comma, so "Bremen Hbf",
+  # "Bf Burg", "Verden(Aller)" and "Farge-Süd / Wasserweg" read well
   - id: "speaker_next_train"
     alias: Speaker says the next train
     description: The next trains from Bremen-Burg that pass Bremen Hbf
@@ -156,7 +156,7 @@ automation:
                 {#- DBF still lists a train for a few minutes after it left -#}
                 {%- if at > now() - timedelta(minutes=1) -%}
                   {%- set ns.found = ns.found + [{'line': d.train | replace('NWB ', ''),
-                       'to': d.destination | regex_replace(' *[(][^)]*[)]', '') | regex_replace('^Bremen[- ]', '') | regex_replace('^(Bf|Bhf) (.+)$', '\\2 station') | regex_replace(' (Bf|Bhf)$', ' station') | replace('Hbf', 'main station'),
+                       'to': d.destination | regex_replace(' *[(][^)]*[)]', '') | regex_replace('^Bremen[- ]', '') | regex_replace('^(Bf|Bhf) (.+)$', '\\2 station') | regex_replace(' (Bf|Bhf)$', ' station') | replace('Hbf', 'main station') | regex_replace(' */ *', ', '),
                        'at': clock(at), 'in': ((at - now()).total_seconds() / 60) | round(0) | int,
                        'late': d.delayDeparture | int(0), 'platform': d.platform}] -%}
                 {%- endif -%}
@@ -200,7 +200,7 @@ automation:
               {%- for d in (response.content.departures if response and response.status == 200 else []) -%}
                 {%- if not d.isCancelled and d.time > now().timestamp() -%}
                   {%- set ns.found = ns.found + [{'line': d.train,
-                       'to': d.destination | regex_replace(' *[(][^)]*[)]', '') | regex_replace('^Bremen[- ]', '') | regex_replace('^(Bf|Bhf) (.+)$', '\\2 station') | regex_replace(' (Bf|Bhf)$', ' station') | replace('Hbf', 'main station'),
+                       'to': d.destination | regex_replace(' *[(][^)]*[)]', '') | regex_replace('^Bremen[- ]', '') | regex_replace('^(Bf|Bhf) (.+)$', '\\2 station') | regex_replace(' (Bf|Bhf)$', ' station') | replace('Hbf', 'main station') | regex_replace(' */ *', ', '),
                        'stop': stop, 'time': d.time, 'in': ((d.time - now().timestamp()) / 60) | round(0) | int}] -%}
                 {%- endif -%}
               {%- endfor -%}
