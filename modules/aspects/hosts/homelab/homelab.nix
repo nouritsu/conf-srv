@@ -24,6 +24,7 @@
       services.scrutiny
       services.paperless
       services.homeassistant
+      services.voice
       services.prowlarr
       services.tailscale
       services.radarr

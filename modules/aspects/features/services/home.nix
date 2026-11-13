@@ -8,7 +8,11 @@
       inherit port;
     };
 
-    nixos = {pkgs, ...}: {
+    nixos = {
+      config,
+      pkgs,
+      ...
+    }: {
       virtualisation.oci-containers.containers.home-assistant = {
         image = "lscr.io/linuxserver/homeassistant:latest@sha256:6e6257d3a396177d17834bb1fea6226c62380ffab77047a0bb3e325b5421a74b";
         # no ports: --net=host publishes nothing, podman discards them
@@ -31,17 +35,48 @@
       systemd.tmpfiles.rules = [
         "d /data/homeassistant 0775 1000 data -"
         "d /data/homeassistant/nix 0775 1000 data -"
+        "d /data/homeassistant/nix/packages 0775 1000 data -"
       ];
+
+      # the bin calendar's source, which names the address; the rest of the bins
+      # are in packages/speaker.yaml
+      sops.secrets."homeassistant/bins-street" = {};
+      sops.secrets."homeassistant/bins-house-number" = {};
+      sops.templates."ha-bins.yaml".content = ''
+        waste_collection_schedule:
+          sources:
+            - name: c_trace_de
+              args:
+                service: bremenabfallkalender
+                ort: Bremen
+                strasse: "${config.sops.placeholder."homeassistant/bins-street"}"
+                hausnummer: "${config.sops.placeholder."homeassistant/bins-house-number"}"
+      '';
 
       # copied, not mounted: the image chowns /config on start, which fails on the store
       systemd.services.podman-home-assistant.preStart = let
         tapo = "/data/homeassistant/custom_components/tapo";
         patch = "${pkgs.gnupatch}/bin/patch -s -f -p1 --no-backup-if-mismatch -d ${tapo}";
         one-request = ./home/tapo-one-request.patch;
+        # Die Bremer Stadtreinigung's calendar; from here rather than hacs, as
+        # its configuration is the yaml above
+        waste-collection = pkgs.fetchFromGitHub {
+          owner = "mampfes";
+          repo = "hacs_waste_collection_schedule";
+          rev = "v2.36.0";
+          hash = "sha256-uCWvglnDeJ4/QE1+gnLqM4i6tb5XVb7aQDQC3xOZjfg=";
+        };
+        components = "/data/homeassistant/custom_components";
       in ''
         install -m 0444 -o 1000 -g data ${./home/configuration.yaml} /data/homeassistant/configuration.yaml
         install -m 0444 -o 1000 -g data ${./home/automations.yaml} /data/homeassistant/nix/automations.yaml
         install -m 0444 -o 1000 -g data ${./home/scenes.yaml} /data/homeassistant/nix/scenes.yaml
+        install -m 0444 -o 1000 -g data ${./home/packages/speaker.yaml} /data/homeassistant/nix/packages/speaker.yaml
+        install -m 0440 -o 1000 -g data ${config.sops.templates."ha-bins.yaml".path} /data/homeassistant/nix/packages/bins.yaml
+
+        rm -rf ${components}/waste_collection_schedule
+        cp -r --no-preserve=mode ${waste-collection}/custom_components/waste_collection_schedule ${components}/
+        chown -R 1000:data ${components}/waste_collection_schedule
 
         # hacs owns the tapo integration, which sends power, colour and brightness as three steps; patched it sends one
         if [ -f ${tapo}/light.py ]; then

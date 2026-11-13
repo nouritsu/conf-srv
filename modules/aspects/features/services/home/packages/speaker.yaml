@@ -1,0 +1,367 @@
+# the bedroom speaker (github:nouritsu/ha-speaker): what it answers beyond
+# Assist's own commands, what its LED ring flags, and its action key. The
+# ring: magenta for a homelab service down, the bins' colours the afternoon
+# before, orange for the Crafty running low, cyan once it's charged.
+# Speech-to-Phrase learns the sentences below from Home Assistant itself, so
+# they stay plain: no wildcards
+
+rest_command:
+  # departures from DBF (dbf.finalrewind.org), fetched only when asked for
+  departures_burg:
+    url: https://dbf.finalrewind.org/Bremen-Burg.json?version=3&limit=12
+    timeout: 10
+  departures_burgdammer_ring:
+    url: https://dbf.finalrewind.org/Bremen%20Burgdammer%20Ring.json?hafas=VBN&version=3&limit=6
+    timeout: 10
+  departures_goldbergplatz:
+    url: https://dbf.finalrewind.org/Bremen%20Goldbergplatz.json?hafas=VBN&version=3&limit=6
+    timeout: 10
+  # Gatus' last result per endpoint
+  homelab_status:
+    url: http://127.0.0.1:4000/api/v1/endpoints/statuses?page=1&pageSize=1
+    timeout: 10
+
+rest:
+  - resource: http://127.0.0.1:4000/api/v1/endpoints/statuses?page=1&pageSize=1
+    scan_interval: 300
+    sensor:
+      - name: Homelab failing endpoints
+        unique_id: homelab_failing_endpoints
+        icon: mdi:server-network-off
+        value_template: >-
+          {{ value_json | map(attribute='results') | map('last')
+             | rejectattr('success') | list | count }}
+
+sensor:
+  # Die Bremer Stadtreinigung's next collection; its source, which names the
+  # address, is in bins.yaml from sops
+  - platform: waste_collection_schedule
+    name: Next bins
+    unique_id: next_bins
+    value_template: "{{ value.types | join(', ') }}"
+    add_days_to: true
+    details_format: hidden
+
+template:
+  - sensor:
+      # comma-separated colors for the speaker's idle ring, or nothing
+      - name: Speaker notice
+        unique_id: speaker_notice
+        icon: mdi:led-on
+        state: >-
+          {%- set ns = namespace(colors=[]) -%}
+          {%- if states('sensor.homelab_failing_endpoints') | int(0) > 0 -%}
+            {%- set ns.colors = ns.colors + ['#d500f9'] -%}
+          {%- endif -%}
+          {#- the bins, from the afternoon before -#}
+          {%- set bins = states.sensor.next_bins -%}
+          {%- if bins and bins.attributes.daysTo == 1 and now().hour >= 15 -%}
+            {%- set palette = {'Restmüll': ['#ffffff'], 'Bioabfall': ['#33cc33'],
+                 'Papier / Gelber Sack': ['#2979ff', '#ffd600'], 'Tannenbaumabfuhr': ['#00796b']} -%}
+            {%- for kind in bins.state.split(', ') -%}
+              {%- set ns.colors = ns.colors + palette.get(kind, ['#ffffff']) -%}
+            {%- endfor -%}
+          {%- endif -%}
+          {%- set crafty = states.sensor.speaker_crafty_battery -%}
+          {%- if crafty and crafty.state | is_number -%}
+            {%- if crafty.state | int <= 15 -%}
+              {%- set ns.colors = ns.colors + ['#ff6d00'] -%}
+            {#- charged, for the two hours after it got there -#}
+            {%- elif crafty.state | int >= 100 and now() - crafty.last_changed < timedelta(hours=2) -%}
+              {%- set ns.colors = ns.colors + ['#00e5ff'] -%}
+            {%- endif -%}
+          {%- endif -%}
+          {{ ns.colors | join(',') }}
+
+script:
+  # the lamps off ten minutes after "good night"; another "good night" restarts the wait
+  speaker_good_night:
+    alias: Speaker good night
+    mode: restart
+    sequence:
+      - action: scene.turn_on
+        target:
+          entity_id: scene.night
+      - delay:
+          minutes: 10
+      - action: light.turn_off
+        target:
+          entity_id: [light.bed_light, light.table_light, light.tv_stand_lamp]
+
+automation:
+  - id: "speaker_action_key_double_press"
+    alias: Speaker action key toggles the lamps
+    description: A double press on the speaker's action key turns the bedroom lamps off if any is on, else on as they were
+    triggers:
+      - trigger: state
+        entity_id: event.speaker_action_key
+        not_from: unavailable
+    conditions:
+      - condition: template
+        value_template: "{{ trigger.to_state.attributes.event_type == 'double_press' }}"
+    actions:
+      - if:
+          - condition: state
+            entity_id: [light.bed_light, light.table_light, light.tv_stand_lamp]
+            match: any
+            state: "on"
+        then:
+          - action: light.turn_off
+            target:
+              entity_id: [light.bed_light, light.table_light, light.tv_stand_lamp]
+        else:
+          - action: light.turn_on
+            target:
+              entity_id: [light.bed_light, light.table_light, light.tv_stand_lamp]
+
+  - id: "speaker_next_train"
+    alias: Speaker says the next train
+    description: The next trains from Bremen-Burg that pass Bremen Hbf
+    triggers:
+      - trigger: conversation
+        command:
+          - "(when is|when's) the next train"
+          - "next train"
+    actions:
+      - action: rest_command.departures_burg
+        response_variable: response
+        continue_on_error: true
+      - variables:
+          trains: >-
+            {%- set ns = namespace(found=[]) -%}
+            {%- for d in (response.content.departures if response is defined and response.status == 200 else []) -%}
+              {%- set names = d.route | map(attribute='name') | list -%}
+              {%- set here = names.index('Bremen-Burg') if 'Bremen-Burg' in names else -1 -%}
+              {%- if here >= 0 and 'Bremen Hbf' in names[here + 1:] and not d.isCancelled -%}
+                {%- set at = today_at(d.scheduledDeparture) + timedelta(minutes=d.delayDeparture | int(0)) -%}
+                {%- set at = at + timedelta(days=1) if at < now() - timedelta(hours=12) else at -%}
+                {%- set ns.found = ns.found + [{'line': d.train | replace('NWB ', ''), 'to': d.destination,
+                     'at': at.strftime('%H:%M'), 'in': ((at - now()).total_seconds() / 60) | round(0) | int,
+                     'late': d.delayDeparture | int(0), 'platform': d.platform}] -%}
+              {%- endif -%}
+            {%- endfor -%}
+            {{ ns.found[:2] }}
+      - set_conversation_response: >-
+          {%- if trains | count == 0 -%}
+            I couldn't get the trains from Bremen-Burg right now.
+          {%- else -%}
+            {%- set t = trains[0] -%}
+            The next train to the city is the {{ t.line }} to {{ t.to }} at {{ t.at }}, in {{ t.in }} minutes,
+            from platform {{ t.platform }}{{ ', running ' ~ t.late ~ ' minutes late' if t.late > 0 }}.
+            {%- if trains | count > 1 %} After that, the {{ trains[1].line }} at {{ trains[1].at }}.{% endif -%}
+          {%- endif -%}
+
+  - id: "speaker_next_bus"
+    alias: Speaker says the next buses
+    description: The next buses from Burgdammer Ring and Goldbergplatz
+    triggers:
+      - trigger: conversation
+        command:
+          - "(when is|when's) the next bus"
+          - "next bus"
+    actions:
+      - action: rest_command.departures_burgdammer_ring
+        response_variable: ring
+        continue_on_error: true
+      - action: rest_command.departures_goldbergplatz
+        response_variable: goldberg
+        continue_on_error: true
+      - variables:
+          buses: >-
+            {%- set ns = namespace(found=[]) -%}
+            {%- for stop, response in [('Burgdammer Ring', ring if ring is defined else none),
+                                        ('Goldbergplatz', goldberg if goldberg is defined else none)] -%}
+              {%- for d in (response.content.departures if response and response.status == 200 else []) -%}
+                {%- if not d.isCancelled and d.time > now().timestamp() -%}
+                  {%- set ns.found = ns.found + [{'line': d.train, 'to': d.destination, 'stop': stop,
+                       'time': d.time, 'in': ((d.time - now().timestamp()) / 60) | round(0) | int}] -%}
+                {%- endif -%}
+              {%- endfor -%}
+            {%- endfor -%}
+            {{ (ns.found | sort(attribute='time'))[:3] }}
+      - set_conversation_response: >-
+          {%- if buses | count == 0 -%}
+            I couldn't get the buses right now.
+          {%- else -%}
+            {%- for b in buses -%}
+              {{ b.line }} to {{ b.to }} from {{ b.stop }} {{ 'now' if b.in < 1 else 'in 1 minute' if b.in == 1 else 'in ' ~ b.in ~ ' minutes' }}{{ '.' if loop.last else ', ' }}
+            {%- endfor -%}
+          {%- endif -%}
+
+  - id: "speaker_homelab_status"
+    alias: Speaker says how the homelab is
+    triggers:
+      - trigger: conversation
+        command:
+          - "is the homelab (ok|okay|up|running)"
+          - "how is the homelab"
+          - "homelab status"
+    actions:
+      - action: rest_command.homelab_status
+        response_variable: response
+        continue_on_error: true
+      - set_conversation_response: >-
+          {%- if response is not defined or response.status != 200 -%}
+            I couldn't reach Gatus.
+          {%- else -%}
+            {%- set ns = namespace(down=[]) -%}
+            {%- for e in response.content if e.results and not (e.results | last).success -%}
+              {%- set ns.down = ns.down + [e.name] -%}
+            {%- endfor -%}
+            {%- if ns.down | count == 0 -%}
+              All {{ response.content | count }} services are up.
+            {%- else -%}
+              {{ ns.down | count }} of {{ response.content | count }} services {{ 'is' if ns.down | count == 1 else 'are' }} down: {{ ns.down | join(', ') }}.
+            {%- endif -%}
+          {%- endif -%}
+
+  - id: "speaker_bins"
+    alias: Speaker says which bins go out
+    triggers:
+      - trigger: conversation
+        command:
+          - "which (bin|bins) (is|are|goes out|go out) tomorrow"
+          - "which bin is next"
+          - "when is the next bin collection"
+    actions:
+      - variables:
+          words:
+            Restmüll: the residual waste
+            Bioabfall: the bio bin
+            Papier / Gelber Sack: paper and the yellow bags
+            Tannenbaumabfuhr: Christmas trees
+      - set_conversation_response: >-
+          {%- set bins = states.sensor.next_bins -%}
+          {%- if not bins or bins.attributes.daysTo is not defined -%}
+            I don't know the bin days yet.
+          {%- else -%}
+            {%- set ns = namespace(said=[]) -%}
+            {%- for kind in bins.state.split(', ') -%}
+              {%- set ns.said = ns.said + [words.get(kind, kind)] -%}
+            {%- endfor -%}
+            {%- set said = ns.said | join(' and ') -%}
+            {%- set days = bins.attributes.daysTo | int -%}
+            {%- if days == 0 -%} Today it's {{ said }}.
+            {%- elif days == 1 -%} Tomorrow it's {{ said }}.
+            {%- else -%} Nothing tomorrow. Next is {{ said }} on {{ (now() + timedelta(days=days)).strftime('%A') }}.
+            {%- endif -%}
+          {%- endif -%}
+
+  - id: "speaker_crafty_battery"
+    alias: Speaker says the Crafty's battery
+    triggers:
+      - trigger: conversation
+        command:
+          - "how (charged|full) is (my|the) crafty"
+          - "is (my|the) crafty charged"
+          - "crafty battery"
+    actions:
+      - set_conversation_response: >-
+          {%- set crafty = states('sensor.speaker_crafty_battery') -%}
+          {%- if crafty | is_number -%}
+            Your Crafty is at {{ crafty | int }} percent.
+          {%- else -%}
+            I haven't heard from your Crafty yet.
+          {%- endif -%}
+
+  - id: "speaker_good_night"
+    alias: Speaker says good night
+    triggers:
+      - trigger: conversation
+        command: "good night"
+    actions:
+      - action: script.turn_on
+        target:
+          entity_id: script.speaker_good_night
+      - set_conversation_response: Good night. The lamps go off in ten minutes.
+
+  - id: "speaker_good_morning"
+    alias: Speaker says good morning
+    description: The Day scene, the weather, and the next train
+    triggers:
+      - trigger: conversation
+        command: "good morning"
+    actions:
+      - action: script.turn_off
+        target:
+          entity_id: script.speaker_good_night
+      - action: scene.turn_on
+        target:
+          entity_id: scene.day
+      - action: weather.get_forecasts
+        target:
+          entity_id: weather.forecast_home
+        data:
+          type: daily
+        response_variable: forecast
+        continue_on_error: true
+      - action: rest_command.departures_burg
+        response_variable: response
+        continue_on_error: true
+      - variables:
+          words:
+            clear-night: clear
+            cloudy: cloudy
+            exceptional: unusual
+            fog: foggy
+            hail: hailing
+            lightning: stormy
+            lightning-rainy: stormy
+            partlycloudy: partly cloudy
+            pouring: pouring
+            rainy: rainy
+            snowy: snowy
+            snowy-rainy: sleety
+            sunny: sunny
+            windy: windy
+            windy-variant: windy
+          today: >-
+            {{ forecast['weather.forecast_home'].forecast[0]
+               if forecast is defined and forecast['weather.forecast_home'] is defined else none }}
+          train: >-
+            {%- set ns = namespace(found=none) -%}
+            {%- for d in (response.content.departures if response is defined and response.status == 200 else []) -%}
+              {%- set names = d.route | map(attribute='name') | list -%}
+              {%- set here = names.index('Bremen-Burg') if 'Bremen-Burg' in names else -1 -%}
+              {%- if ns.found is none and here >= 0 and 'Bremen Hbf' in names[here + 1:] and not d.isCancelled -%}
+                {%- set at = today_at(d.scheduledDeparture) + timedelta(minutes=d.delayDeparture | int(0)) -%}
+                {%- set ns.found = {'line': d.train | replace('NWB ', ''), 'at': at.strftime('%H:%M'),
+                     'in': ((at - now()).total_seconds() / 60) | round(0) | int} -%}
+              {%- endif -%}
+            {%- endfor -%}
+            {{ ns.found }}
+      - set_conversation_response: >-
+          Good morning.
+          {%- set w = states.weather.forecast_home -%}
+          {%- if w %} It's {{ w.attributes.temperature | round(0) | int }} degrees and {{ words.get(w.state, w.state) }}
+            {%- if today %}, up to {{ today.temperature | round(0) | int }} today
+              {%- if today.precipitation_probability is defined and today.precipitation_probability >= 50 %} with rain likely{% endif -%}
+            {%- endif %}.
+          {%- endif -%}
+          {%- if train %} The next train to the city is the {{ train.line }} at {{ train.at }}, in {{ train.in }} minutes.{% endif -%}
+
+  # the ring shows these too; said aloud only in the day
+  - id: "speaker_crafty_announcements"
+    alias: Speaker announces the Crafty's battery
+    triggers:
+      - trigger: numeric_state
+        entity_id: sensor.speaker_crafty_battery
+        above: 99
+        id: charged
+      - trigger: numeric_state
+        entity_id: sensor.speaker_crafty_battery
+        below: 16
+        id: low
+    conditions:
+      - condition: time
+        after: "08:00:00"
+        before: "22:00:00"
+    actions:
+      - action: assist_satellite.announce
+        target:
+          entity_id: assist_satellite.speaker_assist_satellite
+        data:
+          message: >-
+            {{ 'Your Crafty is fully charged.' if trigger.id == 'charged'
+               else 'Your Crafty is running low.' }}
+          preannounce: false

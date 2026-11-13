@@ -1,5 +1,9 @@
 default_config:
 
+homeassistant:
+  # one file per device or feature, from nixos-srv
+  packages: !include_dir_named nix/packages
+
 frontend:
   themes: !include_dir_merge_named themes
 
