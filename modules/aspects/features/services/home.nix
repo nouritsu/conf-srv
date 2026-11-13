@@ -36,6 +36,8 @@
         "d /data/homeassistant 0775 1000 data -"
         "d /data/homeassistant/nix 0775 1000 data -"
         "d /data/homeassistant/nix/packages 0775 1000 data -"
+        # jinja macros templates import, such as the speaker's clock times
+        "d /data/homeassistant/custom_templates 0775 1000 data -"
       ];
 
       # the bin calendar's source, which names the address; the rest of the bins
@@ -72,6 +74,7 @@
         install -m 0444 -o 1000 -g data ${./home/automations.yaml} /data/homeassistant/nix/automations.yaml
         install -m 0444 -o 1000 -g data ${./home/scenes.yaml} /data/homeassistant/nix/scenes.yaml
         install -m 0444 -o 1000 -g data ${./home/packages/speaker.yaml} /data/homeassistant/nix/packages/speaker.yaml
+        install -m 0444 -o 1000 -g data ${./home/custom_templates/speaker.jinja} /data/homeassistant/custom_templates/speaker.jinja
         install -m 0440 -o 1000 -g data ${config.sops.templates."ha-bins.yaml".path} /data/homeassistant/nix/packages/bins.yaml
 
         rm -rf ${components}/waste_collection_schedule

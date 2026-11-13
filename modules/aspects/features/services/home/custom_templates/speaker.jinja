@@ -1,0 +1,15 @@
+{#- the speaker's clock times in words, on the 24-hour clock: 17:45 is
+    "seventeen forty-five", 7:05 "seven oh five" and 17:00 "seventeen
+    hundred", so no voice reads them as 5:45. Imported with
+    {% from 'speaker.jinja' import clock %} -#}
+
+{%- macro number(n) -%}
+  {%- set ones = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten',
+       'eleven', 'twelve', 'thirteen', 'fourteen', 'fifteen', 'sixteen', 'seventeen', 'eighteen', 'nineteen'] -%}
+  {%- set tens = ['', '', 'twenty', 'thirty', 'forty', 'fifty'] -%}
+  {{- ones[n] if n < 20 else tens[n // 10] ~ ('-' ~ ones[n % 10] if n % 10 else '') -}}
+{%- endmacro -%}
+
+{%- macro clock(at) -%}
+  {{- number(at.hour) }} {{ 'hundred' if at.minute == 0 else 'oh ' ~ number(at.minute) if at.minute < 10 else number(at.minute) -}}
+{%- endmacro -%}

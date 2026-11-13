@@ -11,34 +11,35 @@
       pkgs,
       ...
     }: let
-      # GLaDOS in German: a fan voice fine-tuned from Thorsten on the German
-      # Portal games' lines (unlicensed, Valve's recordings; for home use only)
+      # GLaDOS: a fan Piper voice trained on the Portal games' lines
+      # (CC BY 4.0 by its card, but Valve's recordings; for home use only).
+      # Piper names a voice by its config's "dataset", which this one leaves
+      # empty, and files it under "language.code", which here is en-us where
+      # Piper's own voices use en_US; both are set so Home Assistant lists it
+      # with the other English voices
       glados-voice = let
-        base = "https://huggingface.co/systemofapwne/piper-de-glados/resolve/f0ee29dfa468cbc69bac1408dd3887611fcb76c1/de/de_DE/glados/medium";
+        base = "https://huggingface.co/DavesArmoury/GLaDOS_TTS/resolve/b64622ad52f15804249f7f08a4c268b5e82c6969";
+        model = pkgs.fetchurl {
+          url = "${base}/glados_piper_medium.onnx";
+          hash = "sha256-s1oH+m/HiOxK1jfsmLdNZvBuZku7Q2a0A10d6qwzCNM=";
+        };
+        voice-config = pkgs.fetchurl {
+          url = "${base}/glados_piper_medium.onnx.json";
+          hash = "sha256-d6EDN3yXHoe/rGqDm+sN6VQz84rPH7ksIB3Nxyhi9CI=";
+        };
       in
-        pkgs.linkFarm "piper-voice-de-glados" [
-          {
-            name = "de_DE-glados-medium.onnx";
-            path = pkgs.fetchurl {
-              url = "${base}/de_DE-glados-medium.onnx";
-              hash = "sha256-o/VxbhvYbGk7cy5DwKPdv/iv0x2u+aUcF8W4Ex0dPRw=";
-            };
-          }
-          {
-            name = "de_DE-glados-medium.onnx.json";
-            path = pkgs.fetchurl {
-              url = "${base}/de_DE-glados-medium.onnx.json";
-              hash = "sha256-aUQ5GCDiRIJYHIZ5Yx20/GrAs0QOJXi8VzZVp8GGhIk=";
-            };
-          }
-        ];
+        pkgs.runCommand "piper-voice-en-glados" {nativeBuildInputs = [pkgs.jq];} ''
+          mkdir $out
+          ln -s ${model} $out/en_US-glados-medium.onnx
+          jq '.dataset = "en_US-glados-medium" | .audio.quality = "medium" | .language.code = "en_US"' ${voice-config} \
+            > $out/en_US-glados-medium.onnx.json
+        '';
     in {
-      # text to speech in German, for the stops and towns the speaker names.
-      # Thorsten is fetched on first start; GLaDOS comes from the store, and
-      # the speaker's assistant picks between them in Home Assistant
+      # text to speech, in GLaDOS' voice from the store; Home Assistant can
+      # still ask for any other Piper voice, which is fetched on first use
       services.wyoming.piper.servers.assist = {
         enable = true;
-        voice = "de_DE-thorsten-medium";
+        voice = "en_US-glados-medium";
         uri = "tcp://127.0.0.1:${toString piper-port}";
         extraArgs = ["--data-dir" "${glados-voice}"];
       };
@@ -46,10 +47,10 @@
       # speech to text for a closed set of phrases: the names Home Assistant
       # exposes to Assist and the sentences its automations trigger on, which
       # it reads with this token. It trains at start for each language an
-      # assistant uses (German for the speaker), and every 10 minutes looks
-      # again, retraining only if a name, sentence or language changed. Fast
-      # on a Pi where whisper takes seconds. nixpkgs has no module for it,
-      # and the homelab's nixpkgs no package
+      # assistant uses, and every 10 minutes looks again, retraining only if
+      # a name, sentence or language changed. Fast on a Pi where whisper
+      # takes seconds. nixpkgs has no module for it, and the homelab's
+      # nixpkgs no package
       sops.secrets."homeassistant/speech-to-phrase-token" = {};
       sops.templates."speech-to-phrase.env".content = ''
         HASS_TOKEN=${config.sops.placeholder."homeassistant/speech-to-phrase-token"}
