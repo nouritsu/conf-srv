@@ -45,10 +45,12 @@
         dependsOn = ["home-assistant"];
       };
 
+      # owned like /data itself: tmpfiles won't create folders inside a root
+      # owned one there ("unsafe path transition")
       systemd.tmpfiles.rules = [
-        "d /data/speech-to-phrase 0750 root root -"
-        "d /data/speech-to-phrase/models 0750 root root -"
-        "d /data/speech-to-phrase/train 0750 root root -"
+        "d /data/speech-to-phrase 0775 1000 data -"
+        "d /data/speech-to-phrase/models 0775 1000 data -"
+        "d /data/speech-to-phrase/train 0775 1000 data -"
       ];
     };
   };

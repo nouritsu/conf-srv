@@ -37,7 +37,6 @@ sensor:
   # address, is in bins.yaml from sops
   - platform: waste_collection_schedule
     name: Next bins
-    unique_id: next_bins
     value_template: "{{ value.types | join(', ') }}"
     add_days_to: true
     details_format: hidden
