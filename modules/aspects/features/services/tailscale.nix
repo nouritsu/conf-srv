@@ -14,7 +14,7 @@ in {
     };
 
     virtualisation.oci-containers.containers.tailscale = {
-      image = "ghcr.io/tailscale/tailscale:latest@sha256:b11583ad2e93e4671128538c88cf11f460444a5d7e449311dd1933a400ab849d";
+      image = "ghcr.io/tailscale/tailscale:latest@sha256:72c1e19e0aedca96b8533bbb0b4368564410ff20b17e53b804eb6c1f04a31be4";
 
       environment = {
         TS_STATE_DIR = "/var/lib/tailscale";
