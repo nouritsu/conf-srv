@@ -128,8 +128,9 @@ automation:
             target:
               entity_id: [light.bed_light, light.table_light, light.tv_stand_lamp]
 
-  # the destinations lose "Bremen " and anything in brackets, and Hbf is "main
-  # station", so "Bremen Hbf" and "Verden(Aller)" read well
+  # the destinations lose "Bremen " and anything in brackets, "Bf Burg" is
+  # "Burg station" and Hbf "main station", so "Bremen Hbf", "Bf Burg" and
+  # "Verden(Aller)" read well
   - id: "speaker_next_train"
     alias: Speaker says the next train
     description: The next trains from Bremen-Burg that pass Bremen Hbf
@@ -155,7 +156,7 @@ automation:
                 {#- DBF still lists a train for a few minutes after it left -#}
                 {%- if at > now() - timedelta(minutes=1) -%}
                   {%- set ns.found = ns.found + [{'line': d.train | replace('NWB ', ''),
-                       'to': d.destination | regex_replace(' *[(][^)]*[)]', '') | regex_replace('^Bremen[- ]', '') | replace('Hbf', 'main station'),
+                       'to': d.destination | regex_replace(' *[(][^)]*[)]', '') | regex_replace('^Bremen[- ]', '') | regex_replace('^(Bf|Bhf) (.+)$', '\\2 station') | regex_replace(' (Bf|Bhf)$', ' station') | replace('Hbf', 'main station'),
                        'at': clock(at), 'in': ((at - now()).total_seconds() / 60) | round(0) | int,
                        'late': d.delayDeparture | int(0), 'platform': d.platform}] -%}
                 {%- endif -%}
@@ -199,7 +200,7 @@ automation:
               {%- for d in (response.content.departures if response and response.status == 200 else []) -%}
                 {%- if not d.isCancelled and d.time > now().timestamp() -%}
                   {%- set ns.found = ns.found + [{'line': d.train,
-                       'to': d.destination | regex_replace(' *[(][^)]*[)]', '') | regex_replace('^Bremen[- ]', '') | replace('Hbf', 'main station'),
+                       'to': d.destination | regex_replace(' *[(][^)]*[)]', '') | regex_replace('^Bremen[- ]', '') | regex_replace('^(Bf|Bhf) (.+)$', '\\2 station') | regex_replace(' (Bf|Bhf)$', ' station') | replace('Hbf', 'main station'),
                        'stop': stop, 'time': d.time, 'in': ((d.time - now().timestamp()) / 60) | round(0) | int}] -%}
                 {%- endif -%}
               {%- endfor -%}
@@ -606,7 +607,26 @@ automation:
             I don't know how charged your phone is right now.
           {%- endif -%}
 
-  # the weather ahead and the sun; "what's the weather" for now is Assist's own
+  # the weather now, ahead, and the sun. Assist's own "what's the weather"
+  # says "6.3 °C and cloudy"; this one says it like the other answers
+  - id: "speaker_weather_now"
+    alias: Speaker says the weather now
+    triggers:
+      - trigger: conversation
+        command:
+          - "(what's|what is|how's) the weather [like] [today]"
+          - "weather"
+    actions:
+      - variables:
+          words: *weather_words
+      - set_conversation_response: >-
+          {%- set w = states.weather.forecast_home -%}
+          {%- if w and w.attributes.temperature is defined -%}
+            It's {{ w.attributes.temperature | round(0) | int }} degrees and {{ words.get(w.state, w.state) }}.
+          {%- else -%}
+            I don't know the weather right now.
+          {%- endif -%}
+
   - id: "speaker_weather_tomorrow"
     alias: Speaker says tomorrow's weather
     triggers:
