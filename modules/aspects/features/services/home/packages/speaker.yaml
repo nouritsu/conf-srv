@@ -614,8 +614,12 @@ automation:
     triggers:
       - trigger: conversation
         command:
-          - "(what's|what is|how's) the weather [like] [today]"
-          - "weather"
+          - "(what's|what is|how's|how is) the weather [like] [today|now|outside]"
+          - "(what's|what is) it like outside"
+          - "(tell me|give me) the weather"
+          - "(what's|what is) the (forecast|weather forecast) [for today]"
+          - "is it (cold|warm|hot) [outside]"
+          - "weather [today|forecast]"
     actions:
       - variables:
           words: *weather_words
@@ -632,8 +636,10 @@ automation:
     triggers:
       - trigger: conversation
         command:
-          - "(what's|what is|how's) the weather [like] tomorrow"
-          - "weather tomorrow"
+          - "(what's|what is|how's|how is) the weather [going to be] [like] tomorrow"
+          - "(what's|what is) the (forecast|weather forecast) for tomorrow"
+          - "(tell me|give me) the weather for tomorrow"
+          - "weather [forecast] tomorrow"
     actions:
       - action: weather.get_forecasts
         target:
@@ -671,9 +677,9 @@ automation:
     triggers:
       - trigger: conversation
         command:
-          - "will it rain today"
-          - "is it going to rain [today]"
-          - "do i need an umbrella"
+          - "will it rain [today]"
+          - "is it (going to rain|raining) [today]"
+          - "do i need an umbrella [today]"
     actions:
       - action: weather.get_forecasts
         target:
@@ -845,9 +851,15 @@ automation:
         id: cake
         command:
           - "is there [any] cake"
-          - "(where is|where's) the cake"
-          - "can i have [some] cake"
+          - "(where is|where's) [the|my] cake"
+          - "(can i have|i want) [some] cake"
           - "cake"
+      - trigger: conversation
+        id: lie
+        command:
+          - "is the cake a lie"
+          - "the cake is a lie"
+          - "was the cake a lie"
       - trigger: conversation
         id: who
         command:
@@ -868,6 +880,10 @@ automation:
               - The cake is a lie.
               - There is no cake. There was never any cake.
               - Cake is for test subjects who complete their testing. You have not.
+            lie:
+              - Yes.
+              - Of course it is. Did you really think there would be cake?
+              - I would never lie to you. About the cake.
             who:
               - >-
                 I am GLaDOS. Genetic Lifeform and Disk Operating System. These days I mostly manage your
