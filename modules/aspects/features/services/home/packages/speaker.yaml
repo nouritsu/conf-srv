@@ -2,8 +2,10 @@
 # Assist's own commands, what its LED ring flags, and its action key. The
 # ring: magenta for a homelab service down, the bins' colours the afternoon
 # before, orange for the Crafty running low, cyan once it's charged.
-# Speech-to-Phrase learns the sentences below from Home Assistant itself, so
-# they stay plain: no wildcards
+# It speaks German, so the stops and towns come out right: the sentences and
+# answers below are German, and Speech-to-Phrase learns the sentences from
+# Home Assistant itself, so they stay plain (no wildcards). Times are written
+# "19 Uhr 26" for Piper to read them as a German would
 
 rest_command:
   # departures from DBF (dbf.finalrewind.org), fetched only when asked for
@@ -73,7 +75,7 @@ template:
           {{ ns.colors | join(',') }}
 
 script:
-  # the lamps off ten minutes after "good night"; another "good night" restarts the wait
+  # the lamps off ten minutes after "gute Nacht"; another "gute Nacht" restarts the wait
   speaker_good_night:
     alias: Speaker good night
     mode: restart
@@ -83,6 +85,21 @@ script:
           entity_id: scene.night
       - delay:
           minutes: 10
+      - action: light.turn_off
+        target:
+          entity_id: [light.bed_light, light.table_light, light.tv_stand_lamp]
+
+  # "Licht aus in zwanzig Minuten"; asking again restarts the wait
+  speaker_lamps_off_later:
+    alias: Speaker turns the lamps off later
+    mode: restart
+    fields:
+      minutes:
+        description: Minutes until the lamps go off
+        example: 20
+    sequence:
+      - delay:
+          minutes: "{{ minutes | int(30) }}"
       - action: light.turn_off
         target:
           entity_id: [light.bed_light, light.table_light, light.tv_stand_lamp]
@@ -119,8 +136,9 @@ automation:
     triggers:
       - trigger: conversation
         command:
-          - "(when is|when's) the next train"
-          - "next train"
+          - "wann (fährt|kommt) der nächste zug"
+          - "wann (fährt|kommt) die nächste bahn"
+          - "(nächster zug|nächste bahn)"
     actions:
       - action: rest_command.departures_burg
         response_variable: response
@@ -134,20 +152,24 @@ automation:
               {%- if here >= 0 and 'Bremen Hbf' in names[here + 1:] and not d.isCancelled -%}
                 {%- set at = today_at(d.scheduledDeparture) + timedelta(minutes=d.delayDeparture | int(0)) -%}
                 {%- set at = at + timedelta(days=1) if at < now() - timedelta(hours=12) else at -%}
-                {%- set ns.found = ns.found + [{'line': d.train | replace('NWB ', ''), 'to': d.destination,
-                     'at': at.strftime('%H:%M'), 'in': ((at - now()).total_seconds() / 60) | round(0) | int,
+                {%- set ns.found = ns.found + [{'line': d.train | replace('NWB ', ''),
+                     'to': d.destination | regex_replace(' *[(][^)]*[)]', '') | regex_replace('^Bremen[- ]', '') | replace('Hbf', 'Hauptbahnhof'),
+                     'at': at.hour ~ ' Uhr' ~ (' ' ~ at.minute if at.minute else ''),
+                     'in': ((at - now()).total_seconds() / 60) | round(0) | int,
                      'late': d.delayDeparture | int(0), 'platform': d.platform}] -%}
               {%- endif -%}
             {%- endfor -%}
             {{ ns.found[:2] }}
       - set_conversation_response: >-
           {%- if trains | count == 0 -%}
-            I couldn't get the trains from Bremen-Burg right now.
+            Ich komme gerade nicht an die Züge ab Bremen-Burg.
           {%- else -%}
             {%- set t = trains[0] -%}
-            The next train to the city is the {{ t.line }} to {{ t.to }} at {{ t.at }}, in {{ t.in }} minutes,
-            from platform {{ t.platform }}{{ ', running ' ~ t.late ~ ' minutes late' if t.late > 0 }}.
-            {%- if trains | count > 1 %} After that, the {{ trains[1].line }} at {{ trains[1].at }}.{% endif -%}
+            Der nächste Zug zum Hauptbahnhof ist die {{ t.line }} Richtung {{ t.to }} um {{ t.at }},
+            {{ 'jetzt' if t.in < 1 else 'in einer Minute' if t.in == 1 else 'in ' ~ t.in ~ ' Minuten' }}
+            {{- ', von Gleis ' ~ t.platform if t.platform }}
+            {{- ', mit ' ~ ('einer Minute' if t.late == 1 else t.late ~ ' Minuten') ~ ' Verspätung' if t.late > 0 }}.
+            {%- if trains | count > 1 %} Danach die {{ trains[1].line }} um {{ trains[1].at }}.{% endif -%}
           {%- endif -%}
 
   - id: "speaker_next_bus"
@@ -156,8 +178,8 @@ automation:
     triggers:
       - trigger: conversation
         command:
-          - "(when is|when's) the next bus"
-          - "next bus"
+          - "wann (fährt|kommt) der nächste bus"
+          - "nächster bus"
     actions:
       - action: rest_command.departures_burgdammer_ring
         response_variable: ring
@@ -172,18 +194,19 @@ automation:
                                         ('Goldbergplatz', goldberg if goldberg is defined else none)] -%}
               {%- for d in (response.content.departures if response and response.status == 200 else []) -%}
                 {%- if not d.isCancelled and d.time > now().timestamp() -%}
-                  {%- set ns.found = ns.found + [{'line': d.train, 'to': d.destination, 'stop': stop,
-                       'time': d.time, 'in': ((d.time - now().timestamp()) / 60) | round(0) | int}] -%}
+                  {%- set ns.found = ns.found + [{'line': d.train,
+                       'to': d.destination | regex_replace(' *[(][^)]*[)]', '') | regex_replace('^Bremen[- ]', '') | replace('Hbf', 'Hauptbahnhof'),
+                       'stop': stop, 'time': d.time, 'in': ((d.time - now().timestamp()) / 60) | round(0) | int}] -%}
                 {%- endif -%}
               {%- endfor -%}
             {%- endfor -%}
             {{ (ns.found | sort(attribute='time'))[:3] }}
       - set_conversation_response: >-
           {%- if buses | count == 0 -%}
-            I couldn't get the buses right now.
+            Ich komme gerade nicht an die Busse.
           {%- else -%}
             {%- for b in buses -%}
-              {{ b.line }} to {{ b.to }} from {{ b.stop }} {{ 'now' if b.in < 1 else 'in 1 minute' if b.in == 1 else 'in ' ~ b.in ~ ' minutes' }}{{ '.' if loop.last else ', ' }}
+              {{ b.line }} Richtung {{ b.to }} ab {{ b.stop }} {{ 'jetzt' if b.in < 1 else 'in einer Minute' if b.in == 1 else 'in ' ~ b.in ~ ' Minuten' }}{{ '.' if loop.last else ', ' }}
             {%- endfor -%}
           {%- endif -%}
 
@@ -192,25 +215,27 @@ automation:
     triggers:
       - trigger: conversation
         command:
-          - "is the homelab (ok|okay|up|running)"
-          - "how is the homelab"
+          - "läuft das homelab"
+          - "ist das homelab (okay|ok|online)"
+          - "wie geht es dem homelab"
           - "homelab status"
+          - "laufen (die|alle) server"
     actions:
       - action: rest_command.homelab_status
         response_variable: response
         continue_on_error: true
       - set_conversation_response: >-
           {%- if response is not defined or response.status != 200 -%}
-            I couldn't reach Gatus.
+            Ich erreiche Gatus gerade nicht.
           {%- else -%}
             {%- set ns = namespace(down=[]) -%}
             {%- for e in response.content if e.results and not (e.results | last).success -%}
               {%- set ns.down = ns.down + [e.name] -%}
             {%- endfor -%}
             {%- if ns.down | count == 0 -%}
-              All {{ response.content | count }} services are up.
+              Alle {{ response.content | count }} Dienste laufen.
             {%- else -%}
-              {{ ns.down | count }} of {{ response.content | count }} services {{ 'is' if ns.down | count == 1 else 'are' }} down: {{ ns.down | join(', ') }}.
+              {{ ns.down | count }} von {{ response.content | count }} Diensten {{ 'ist' if ns.down | count == 1 else 'sind' }} ausgefallen: {{ ns.down | join(', ') }}.
             {%- endif -%}
           {%- endif -%}
 
@@ -219,30 +244,34 @@ automation:
     triggers:
       - trigger: conversation
         command:
-          - "which (bin|bins) (is|are|goes out|go out) tomorrow"
-          - "which bin is next"
-          - "when is the next bin collection"
+          - "welche tonne (kommt|muss) morgen raus"
+          - "welcher müll wird morgen abgeholt"
+          - "wann kommt die müllabfuhr"
+          - "welche tonne ist als nächstes dran"
+          - "müllabfuhr"
     actions:
       - variables:
           words:
-            Restmüll: the residual waste
-            Bioabfall: the bio bin
-            Papier / Gelber Sack: paper and the yellow bags
-            Tannenbaumabfuhr: Christmas trees
+            Restmüll: Restmüll
+            Bioabfall: Biomüll
+            Papier / Gelber Sack: Papier und Gelbe Säcke
+            Tannenbaumabfuhr: Tannenbäume
+          weekdays: [Montag, Dienstag, Mittwoch, Donnerstag, Freitag, Samstag, Sonntag]
       - set_conversation_response: >-
           {%- set bins = states.sensor.next_bins -%}
           {%- if not bins or bins.attributes.daysTo is not defined -%}
-            I don't know the bin days yet.
+            Ich kenne die Abholtage noch nicht.
           {%- else -%}
             {%- set ns = namespace(said=[]) -%}
             {%- for kind in bins.state.split(', ') -%}
               {%- set ns.said = ns.said + [words.get(kind, kind)] -%}
             {%- endfor -%}
-            {%- set said = ns.said | join(' and ') -%}
+            {%- set said = ns.said | join(' und ') -%}
             {%- set days = bins.attributes.daysTo | int -%}
-            {%- if days == 0 -%} Today it's {{ said }}.
-            {%- elif days == 1 -%} Tomorrow it's {{ said }}.
-            {%- else -%} Nothing tomorrow. Next is {{ said }} on {{ (now() + timedelta(days=days)).strftime('%A') }}.
+            {%- if days == 0 -%} Heute wird abgeholt: {{ said }}.
+            {%- elif days == 1 -%} Morgen wird abgeholt: {{ said }}.
+            {%- elif days < 7 -%} Morgen nichts. Als Nächstes am {{ weekdays[(now() + timedelta(days=days)).weekday()] }}: {{ said }}.
+            {%- else -%} Morgen nichts. Als Nächstes in {{ days }} Tagen: {{ said }}.
             {%- endif -%}
           {%- endif -%}
 
@@ -251,39 +280,44 @@ automation:
     triggers:
       - trigger: conversation
         command:
-          - "how (charged|full) is (my|the) crafty"
-          - "is (my|the) crafty charged"
-          - "crafty battery"
+          - "wie voll ist (mein|der) crafty"
+          - "ist (mein|der) crafty (geladen|voll)"
+          - "crafty akku"
     actions:
       - set_conversation_response: >-
           {%- set crafty = states('sensor.speaker_crafty_battery') -%}
           {%- if crafty | is_number -%}
-            Your Crafty is at {{ crafty | int }} percent.
+            Dein Crafty ist bei {{ crafty | int }} Prozent.
           {%- else -%}
-            I haven't heard from your Crafty yet.
+            Von deinem Crafty habe ich noch nichts gehört.
           {%- endif -%}
 
   - id: "speaker_good_night"
     alias: Speaker says good night
     triggers:
       - trigger: conversation
-        command: "good night"
+        command: "gute nacht"
     actions:
+      - action: script.turn_off
+        target:
+          entity_id: script.speaker_lamps_off_later
       - action: script.turn_on
         target:
           entity_id: script.speaker_good_night
-      - set_conversation_response: Good night. The lamps go off in ten minutes.
+      - set_conversation_response: Gute Nacht. Die Lampen gehen in zehn Minuten aus.
 
   - id: "speaker_good_morning"
     alias: Speaker says good morning
     description: The Day scene, the weather, and the next train
     triggers:
       - trigger: conversation
-        command: "good morning"
+        command:
+          - "guten morgen"
+          - "moin [moin]"
     actions:
       - action: script.turn_off
         target:
-          entity_id: script.speaker_good_night
+          entity_id: [script.speaker_good_night, script.speaker_lamps_off_later]
       - action: scene.turn_on
         target:
           entity_id: scene.day
@@ -298,22 +332,22 @@ automation:
         response_variable: response
         continue_on_error: true
       - variables:
-          words:
-            clear-night: clear
-            cloudy: cloudy
-            exceptional: unusual
-            fog: foggy
-            hail: hailing
-            lightning: stormy
-            lightning-rainy: stormy
-            partlycloudy: partly cloudy
-            pouring: pouring
-            rainy: rainy
-            snowy: snowy
-            snowy-rainy: sleety
-            sunny: sunny
-            windy: windy
-            windy-variant: windy
+          words: &weather_words
+            clear-night: klar
+            cloudy: bewölkt
+            exceptional: ungewöhnliches Wetter
+            fog: Nebel
+            hail: Hagel
+            lightning: Gewitter
+            lightning-rainy: Gewitter und Regen
+            partlycloudy: teilweise bewölkt
+            pouring: starker Regen
+            rainy: Regen
+            snowy: Schnee
+            snowy-rainy: Schneeregen
+            sunny: sonnig
+            windy: windig
+            windy-variant: windig und bewölkt
           today: >-
             {{ forecast['weather.forecast_home'].forecast[0]
                if forecast is defined and forecast['weather.forecast_home'] is defined else none }}
@@ -324,20 +358,272 @@ automation:
               {%- set here = names.index('Bremen-Burg') if 'Bremen-Burg' in names else -1 -%}
               {%- if ns.found is none and here >= 0 and 'Bremen Hbf' in names[here + 1:] and not d.isCancelled -%}
                 {%- set at = today_at(d.scheduledDeparture) + timedelta(minutes=d.delayDeparture | int(0)) -%}
-                {%- set ns.found = {'line': d.train | replace('NWB ', ''), 'at': at.strftime('%H:%M'),
+                {%- set ns.found = {'line': d.train | replace('NWB ', ''),
+                     'at': at.hour ~ ' Uhr' ~ (' ' ~ at.minute if at.minute else ''),
                      'in': ((at - now()).total_seconds() / 60) | round(0) | int} -%}
               {%- endif -%}
             {%- endfor -%}
             {{ ns.found }}
       - set_conversation_response: >-
-          Good morning.
+          Guten Morgen.
           {%- set w = states.weather.forecast_home -%}
-          {%- if w %} It's {{ w.attributes.temperature | round(0) | int }} degrees and {{ words.get(w.state, w.state) }}
-            {%- if today %}, up to {{ today.temperature | round(0) | int }} today
-              {%- if today.precipitation_probability is defined and today.precipitation_probability >= 50 %} with rain likely{% endif -%}
+          {%- if w %} Draußen sind es {{ w.attributes.temperature | round(0) | int }} Grad, {{ words.get(w.state, w.state) }}
+            {%- if today %}, heute bis {{ today.temperature | round(0) | int }} Grad
+              {%- if today.precipitation_probability is defined and today.precipitation_probability >= 50 %}, wahrscheinlich Regen{% endif -%}
             {%- endif %}.
           {%- endif -%}
-          {%- if train %} The next train to the city is the {{ train.line }} at {{ train.at }}, in {{ train.in }} minutes.{% endif -%}
+          {%- if train %} Die nächste Bahn zum Hauptbahnhof ist die {{ train.line }} um {{ train.at }}, in {{ train.in }} Minuten.{% endif -%}
+
+  # the bedroom lamps: dimmer and brighter in steps, a reading light, and off later
+  - id: "speaker_lamps_dimmer"
+    alias: Speaker dims the lamps
+    triggers:
+      - trigger: conversation
+        command:
+          - "[(mach|mache) [das] (licht|die lampen)] dunkler"
+          - "(licht|lampen) dunkler"
+    actions:
+      - variables:
+          lit: "{{ ['light.bed_light', 'light.table_light', 'light.tv_stand_lamp'] | select('is_state', 'on') | list }}"
+      - if:
+          - "{{ lit | count == 0 }}"
+        then:
+          - set_conversation_response: Die Lampen sind schon aus.
+        else:
+          # a lamp below 25% goes off
+          - action: light.turn_on
+            target:
+              entity_id: "{{ lit }}"
+            data:
+              brightness_step_pct: -25
+          - set_conversation_response: Okay.
+
+  - id: "speaker_lamps_brighter"
+    alias: Speaker brightens the lamps
+    triggers:
+      - trigger: conversation
+        command:
+          - "[(mach|mache) [das] (licht|die lampen)] heller"
+          - "(licht|lampen) heller"
+    actions:
+      # the lamps that are on, or all of them from off
+      - variables:
+          lamps: [light.bed_light, light.table_light, light.tv_stand_lamp]
+          lit: "{{ lamps | select('is_state', 'on') | list }}"
+      - action: light.turn_on
+        target:
+          entity_id: "{{ lit if lit | count > 0 else lamps }}"
+        data:
+          brightness_step_pct: 25
+      - set_conversation_response: Okay.
+
+  - id: "speaker_reading_light"
+    alias: Speaker turns on the reading light
+    description: The bed lamp bright and neutral white, the other lamps off
+    triggers:
+      - trigger: conversation
+        command:
+          - "leselicht"
+          - "[(mach|mache|schalt|schalte)] [das] leselicht an"
+          - "ich (will|möchte) lesen"
+    actions:
+      - action: light.turn_on
+        target:
+          entity_id: light.bed_light
+        data:
+          brightness_pct: 100
+          color_temp_kelvin: 4000
+      - action: light.turn_off
+        target:
+          entity_id: [light.table_light, light.tv_stand_lamp]
+      - set_conversation_response: Viel Spaß beim Lesen.
+
+  - id: "speaker_lamps_off_later"
+    alias: Speaker turns the lamps off later
+    triggers:
+      - trigger: conversation
+        command:
+          - "[(mach|mache|schalt|schalte)] [das] licht in ((fünf|zehn|fünfzehn|zwanzig|dreißig|fünfundvierzig) minuten|einer [halben] stunde) aus"
+          - "licht aus in ((fünf|zehn|fünfzehn|zwanzig|dreißig|fünfundvierzig) minuten|einer [halben] stunde)"
+    actions:
+      # the sentence names the minutes in words; the longer words first, so
+      # "fünfzehn" isn't read as "fünf"
+      - variables:
+          minutes: >-
+            {%- set found = trigger.sentence | lower
+                 | regex_findall('fünfundvierzig|fünfzehn|fünf|zehn|zwanzig|dreißig|halben stunde|stunde') -%}
+            {%- set values = {'fünf': 5, 'zehn': 10, 'fünfzehn': 15, 'zwanzig': 20, 'dreißig': 30,
+                 'fünfundvierzig': 45, 'halben stunde': 30, 'stunde': 60} -%}
+            {{ values[found[0]] if found else 30 }}
+      - action: script.turn_on
+        target:
+          entity_id: script.speaker_lamps_off_later
+        data:
+          variables:
+            minutes: "{{ minutes }}"
+      - set_conversation_response: >-
+          Okay, die Lampen gehen {{ 'in einer Stunde' if minutes == 60 else 'in einer halben Stunde' if minutes == 30
+          else 'in ' ~ minutes ~ ' Minuten' }} aus.
+
+  - id: "speaker_lamps_stay_on"
+    alias: Speaker keeps the lamps on
+    description: Cancels "Licht aus in …" and "gute Nacht"'s wait
+    triggers:
+      - trigger: conversation
+        command:
+          - "(lass|lasse) [das] licht an"
+          - "licht anlassen"
+    actions:
+      - action: script.turn_off
+        target:
+          entity_id: [script.speaker_lamps_off_later, script.speaker_good_night]
+      - set_conversation_response: Okay, das Licht bleibt an.
+
+  # the phone
+  - id: "speaker_find_phone"
+    alias: Speaker rings the phone
+    description: The phone says "Hier bin ich" at full alarm volume, even on silent
+    triggers:
+      - trigger: conversation
+        command:
+          - "wo ist mein handy"
+          - "(finde|such|suche) mein handy"
+          - "(lass|lasse) mein handy klingeln"
+    actions:
+      - action: notify.mobile_app_pixel_9_pro_xl
+        data:
+          message: TTS
+          data:
+            tts_text: Hier bin ich!
+            media_stream: alarm_stream_max
+        continue_on_error: true
+      - set_conversation_response: Dein Handy klingelt.
+
+  - id: "speaker_phone_battery"
+    alias: Speaker says the phone's battery
+    triggers:
+      - trigger: conversation
+        command:
+          - "wie voll ist mein handy"
+          - "wie viel akku hat mein handy"
+          - "ist mein handy (geladen|voll)"
+          - "handy akku"
+    actions:
+      - set_conversation_response: >-
+          {%- set level = states('sensor.pixel_9_pro_xl_battery_level_2') -%}
+          {%- if level | is_number -%}
+            Dein Handy ist bei {{ level | int }} Prozent{{ ' und lädt' if is_state('binary_sensor.pixel_9_pro_xl_is_charging_2', 'on') }}.
+          {%- else -%}
+            Ich weiß gerade nicht, wie voll dein Handy ist.
+          {%- endif -%}
+
+  # the weather ahead and the sun; "wie ist das Wetter" for now is Assist's own
+  - id: "speaker_weather_tomorrow"
+    alias: Speaker says tomorrow's weather
+    triggers:
+      - trigger: conversation
+        command:
+          - "wie wird das wetter morgen"
+          - "wie ist das wetter morgen"
+          - "wetter morgen"
+    actions:
+      - action: weather.get_forecasts
+        target:
+          entity_id: weather.forecast_home
+        data:
+          type: daily
+        response_variable: forecast
+        continue_on_error: true
+      - variables:
+          words: *weather_words
+          tomorrow: >-
+            {%- set day = (now() + timedelta(days=1)).date() -%}
+            {%- set ns = namespace(found=none) -%}
+            {%- for f in (forecast['weather.forecast_home'].forecast
+                          if forecast is defined and forecast['weather.forecast_home'] is defined else []) -%}
+              {%- if ns.found is none and as_local(as_datetime(f.datetime)).date() == day -%}
+                {%- set ns.found = f -%}
+              {%- endif -%}
+            {%- endfor -%}
+            {{ ns.found }}
+      - set_conversation_response: >-
+          {%- if not tomorrow -%}
+            Ich habe gerade keine Vorhersage für morgen.
+          {%- else -%}
+            Morgen {{ words.get(tomorrow.condition, tomorrow.condition) }},
+            {%- if tomorrow.templow is defined %} {{ tomorrow.templow | round(0) | int }} bis{% endif %}
+            {{- ' ' ~ tomorrow.temperature | round(0) | int }} Grad
+            {%- set rain = tomorrow.precipitation_probability | default(0) | round(0) | int -%}
+            {{- ', Regenrisiko ' ~ rain ~ ' Prozent' if rain >= 20 }}.
+          {%- endif -%}
+
+  - id: "speaker_rain_today"
+    alias: Speaker says whether it rains today
+    description: The rest of the day, and at least the next six hours
+    triggers:
+      - trigger: conversation
+        command:
+          - "regnet es heute"
+          - "wird es heute regnen"
+          - "gibt es heute regen"
+          - "brauche ich einen regenschirm"
+    actions:
+      - action: weather.get_forecasts
+        target:
+          entity_id: weather.forecast_home
+        data:
+          type: hourly
+        response_variable: forecast
+        continue_on_error: true
+      - variables:
+          rain: >-
+            {%- set end = [today_at('23:59'), now() + timedelta(hours=6)] | max -%}
+            {%- set ns = namespace(most=0, first=none) -%}
+            {%- for f in (forecast['weather.forecast_home'].forecast
+                          if forecast is defined and forecast['weather.forecast_home'] is defined else []) -%}
+              {%- set at = as_local(as_datetime(f.datetime)) -%}
+              {%- set chance = f.precipitation_probability | default(0) | round(0) | int -%}
+              {%- if at <= end -%}
+                {%- set ns.most = [ns.most, chance] | max -%}
+                {%- if ns.first is none and chance >= 50 -%}
+                  {%- set ns.first = at.hour -%}
+                {%- endif -%}
+              {%- endif -%}
+            {%- endfor -%}
+            {{ {'most': ns.most, 'first': ns.first, 'known': forecast is defined} }}
+      - set_conversation_response: >-
+          {%- if states('weather.forecast_home') in ['rainy', 'pouring', 'lightning-rainy', 'snowy-rainy'] -%}
+            Ja, es regnet gerade.
+          {%- elif not rain.known -%}
+            Ich habe gerade keine Vorhersage.
+          {%- elif rain.first is not none -%}
+            Ja, ab {{ rain.first }} Uhr wird es wahrscheinlich regnen, das Risiko liegt bei bis zu {{ rain.most }} Prozent.
+          {%- elif rain.most >= 20 -%}
+            Vielleicht, das Regenrisiko liegt bei bis zu {{ rain.most }} Prozent.
+          {%- else -%}
+            Nein, es bleibt trocken.
+          {%- endif -%}
+
+  - id: "speaker_sun"
+    alias: Speaker says when the sun rises or sets
+    triggers:
+      - trigger: conversation
+        id: setting
+        command:
+          - "wann geht die sonne unter"
+          - "wann ist sonnenuntergang"
+          - "sonnenuntergang"
+      - trigger: conversation
+        id: rising
+        command:
+          - "wann geht die sonne auf"
+          - "wann ist sonnenaufgang"
+          - "sonnenaufgang"
+    actions:
+      - set_conversation_response: >-
+          {%- set at = as_local(as_datetime(state_attr('sun.sun', 'next_' ~ trigger.id))) -%}
+          Die Sonne geht {{ 'heute' if at.date() == now().date() else 'morgen' }} um {{ at.hour }} Uhr
+          {{- ' ' ~ at.minute if at.minute }} {{ 'unter' if trigger.id == 'setting' else 'auf' }}.
 
   # the ring shows these too; said aloud only in the day
   - id: "speaker_crafty_announcements"
@@ -361,6 +647,6 @@ automation:
           entity_id: assist_satellite.speaker_assist_satellite
         data:
           message: >-
-            {{ 'Your Crafty is fully charged.' if trigger.id == 'charged'
-               else 'Your Crafty is running low.' }}
+            {{ 'Dein Crafty ist voll geladen.' if trigger.id == 'charged'
+               else 'Der Akku von deinem Crafty ist fast leer.' }}
           preannounce: false

@@ -7,18 +7,21 @@
     speech-to-phrase-port = 10300;
   in {
     nixos = {config, ...}: {
-      # text to speech; the voice is fetched on first start
+      # text to speech in German, for the stops and towns the speaker names;
+      # the voice is fetched on first start
       services.wyoming.piper.servers.assist = {
         enable = true;
-        voice = "en_US-lessac-medium";
+        voice = "de_DE-thorsten-medium";
         uri = "tcp://127.0.0.1:${toString piper-port}";
       };
 
       # speech to text for a closed set of phrases: the names Home Assistant
       # exposes to Assist and the sentences its automations trigger on, which
-      # it reads with this token and trains a model on at start; fast on a Pi
-      # where whisper takes seconds. nixpkgs has no module for it, and the
-      # homelab's nixpkgs no package
+      # it reads with this token. It trains at start for each language an
+      # assistant uses (German for the speaker), and every 10 minutes looks
+      # again, retraining only if a name, sentence or language changed. Fast
+      # on a Pi where whisper takes seconds. nixpkgs has no module for it,
+      # and the homelab's nixpkgs no package
       sops.secrets."homeassistant/speech-to-phrase-token" = {};
       sops.templates."speech-to-phrase.env".content = ''
         HASS_TOKEN=${config.sops.placeholder."homeassistant/speech-to-phrase-token"}
@@ -36,7 +39,8 @@
               --uri tcp://127.0.0.1:${toString speech-to-phrase-port} \
               --hass-websocket-uri ws://127.0.0.1:8123/api/websocket \
               --hass-token "$HASS_TOKEN" \
-              --retrain-on-start
+              --retrain-on-start \
+              --retrain-seconds 600
           ''
         ];
         volumes = ["/data/speech-to-phrase/models:/models" "/data/speech-to-phrase/train:/train"];
