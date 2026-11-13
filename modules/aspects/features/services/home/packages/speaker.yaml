@@ -79,11 +79,13 @@ script:
     mode: restart
     sequence:
       - action: scene.turn_on
+        continue_on_error: true
         target:
           entity_id: scene.night
       - delay:
           minutes: 10
       - action: light.turn_off
+        continue_on_error: true
         target:
           entity_id: [light.bed_light, light.table_light, light.tv_stand_lamp]
 
@@ -99,6 +101,7 @@ script:
       - delay:
           minutes: "{{ minutes | int(30) }}"
       - action: light.turn_off
+        continue_on_error: true
         target:
           entity_id: [light.bed_light, light.table_light, light.tv_stand_lamp]
 
@@ -121,10 +124,12 @@ automation:
             state: "on"
         then:
           - action: light.turn_off
+            continue_on_error: true
             target:
               entity_id: [light.bed_light, light.table_light, light.tv_stand_lamp]
         else:
           - action: light.turn_on
+            continue_on_error: true
             target:
               entity_id: [light.bed_light, light.table_light, light.tv_stand_lamp]
 
@@ -307,9 +312,12 @@ automation:
         target:
           entity_id: script.speaker_good_night
       - set_conversation_response: >-
+          {%- from 'speaker.jinja' import offline -%}
+          {%- set down = offline(['light.bed_light', 'light.table_light', 'light.tv_stand_lamp']) -%}
           {{ ['Good night. The lamps go off in ten minutes. I will be watching.',
               'Sleep well. The lamps go off in ten minutes. I will be right here.',
               'Good night. Ten minutes until the lamps go off. Try not to dream about me.'] | random }}
+          {{- ' ' ~ down if down }}
 
   - id: "speaker_good_morning"
     alias: Speaker says good morning
@@ -322,6 +330,7 @@ automation:
         target:
           entity_id: [script.speaker_good_night, script.speaker_lamps_off_later]
       - action: scene.turn_on
+        continue_on_error: true
         target:
           entity_id: scene.day
       - action: weather.get_forecasts
@@ -400,11 +409,15 @@ automation:
         else:
           # a lamp below 25% goes off
           - action: light.turn_on
+            continue_on_error: true
             target:
               entity_id: "{{ lit }}"
             data:
               brightness_step_pct: -25
-          - set_conversation_response: "{{ 'Fine.' if range(5) | random == 0 else ['Okay.', 'Sure.', 'Done.'] | random }}"
+          - set_conversation_response: >-
+              {%- from 'speaker.jinja' import offline -%}
+              {%- set down = offline(['light.bed_light', 'light.table_light', 'light.tv_stand_lamp']) -%}
+              {{ 'Fine.' if range(5) | random == 0 else ['Okay.', 'Sure.', 'Done.'] | random }}{{ ' ' ~ down if down }}
 
   - id: "speaker_lamps_brighter"
     alias: Speaker brightens the lamps
@@ -419,11 +432,19 @@ automation:
           lamps: [light.bed_light, light.table_light, light.tv_stand_lamp]
           lit: "{{ lamps | select('is_state', 'on') | list }}"
       - action: light.turn_on
+        continue_on_error: true
         target:
           entity_id: "{{ lit if lit | count > 0 else lamps }}"
         data:
           brightness_step_pct: 25
-      - set_conversation_response: "{{ 'Fine.' if range(5) | random == 0 else ['Okay.', 'Sure.', 'Done.'] | random }}"
+      - set_conversation_response: &lamps_reply >-
+          {%- from 'speaker.jinja' import offline -%}
+          {%- set down = offline(lamps) -%}
+          {%- if down and lamps | reject('is_state', ['unavailable', 'unknown']) | list | count == 0 -%}
+            {{ down }}
+          {%- else -%}
+            {{ 'Fine.' if range(5) | random == 0 else ['Okay.', 'Sure.', 'Done.'] | random }}{{ ' ' ~ down if down }}
+          {%- endif -%}
 
   - id: "speaker_reading_light"
     alias: Speaker turns on the reading light
@@ -435,15 +456,23 @@ automation:
           - "i want to read"
     actions:
       - action: light.turn_on
+        continue_on_error: true
         target:
           entity_id: light.bed_light
         data:
           brightness_pct: 100
           color_temp_kelvin: 4000
       - action: light.turn_off
+        continue_on_error: true
         target:
           entity_id: [light.table_light, light.tv_stand_lamp]
-      - set_conversation_response: "{{ ['Enjoy your reading.', 'Reading light on. Try to learn something.'] | random }}"
+      - set_conversation_response: >-
+          {%- from 'speaker.jinja' import offline -%}
+          {%- if states('light.bed_light') in ['unavailable', 'unknown'] -%}
+            {{ offline(['light.bed_light']) }}
+          {%- else -%}
+            {{ ['Enjoy your reading.', 'Reading light on. Try to learn something.'] | random }}
+          {%- endif -%}
 
   - id: "speaker_lamps_off_later"
     alias: Speaker turns the lamps off later
@@ -535,16 +564,19 @@ automation:
           - conditions: "{{ trigger.id == 'switch' and 'off' in text.split() }}"
             sequence:
               - action: light.turn_off
+                continue_on_error: true
                 target:
                   entity_id: "{{ lamps }}"
           - conditions: "{{ trigger.id == 'switch' }}"
             sequence:
               - action: light.turn_on
+                continue_on_error: true
                 target:
                   entity_id: "{{ lamps }}"
           - conditions: "{{ trigger.id == 'colour' and colour == 'warm white' }}"
             sequence:
               - action: light.turn_on
+                continue_on_error: true
                 target:
                   entity_id: "{{ lamps }}"
                 data:
@@ -552,6 +584,7 @@ automation:
           - conditions: "{{ trigger.id == 'colour' }}"
             sequence:
               - action: light.turn_on
+                continue_on_error: true
                 target:
                   entity_id: "{{ lamps }}"
                 data:
@@ -559,6 +592,7 @@ automation:
           - conditions: "{{ trigger.id == 'brightness' }}"
             sequence:
               - action: light.turn_on
+                continue_on_error: true
                 target:
                   entity_id: "{{ lamps }}"
                 data:
@@ -566,9 +600,10 @@ automation:
           - conditions: "{{ trigger.id == 'scene' }}"
             sequence:
               - action: scene.turn_on
+                continue_on_error: true
                 target:
                   entity_id: "{{ 'scene.night' if 'night' in text else 'scene.day' }}"
-      - set_conversation_response: "{{ 'Fine.' if range(5) | random == 0 else ['Okay.', 'Sure.', 'Done.'] | random }}"
+      - set_conversation_response: *lamps_reply
 
   # the phone
   - id: "speaker_find_phone"
@@ -736,9 +771,29 @@ automation:
     actions:
       - set_conversation_response: >-
           {%- from 'speaker.jinja' import clock -%}
-          {%- set at = as_local(as_datetime(state_attr('sun.sun', 'next_' ~ trigger.id))) -%}
-          {{ 'Sunset' if trigger.id == 'setting' else 'Sunrise' }} is {{ 'today' if at.date() == now().date() else 'tomorrow' }}
-          at {{ clock(at) }}.
+          {%- set next = state_attr('sun.sun', 'next_' ~ trigger.id) -%}
+          {%- if not next -%}
+            I don't know when the sun {{ 'sets' if trigger.id == 'setting' else 'rises' }} right now.
+          {%- else -%}
+            {%- set at = as_local(as_datetime(next)) -%}
+            {{ 'Sunset' if trigger.id == 'setting' else 'Sunrise' }} is {{ 'today' if at.date() == now().date() else 'tomorrow' }}
+            at {{ clock(at) }}.
+          {%- endif -%}
+
+  # Assist's own "what time is it" says "9:59 PM"; this says it on the 24-hour
+  # clock like the other answers
+  - id: "speaker_time"
+    alias: Speaker says the time
+    triggers:
+      - trigger: conversation
+        command:
+          - "what time is it [[right] now]"
+          - "(what's|what is) the [current] time"
+          - "time"
+    actions:
+      - set_conversation_response: >-
+          {%- from 'speaker.jinja' import clock -%}
+          It's {{ clock(now()) }}.
 
   # "what can you do" names the topics; "what can you do with the lights" and
   # the like name the sentences for one. Keep these in step with the

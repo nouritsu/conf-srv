@@ -13,3 +13,19 @@
 {%- macro clock(at) -%}
   {{- number(at.hour) }} {{ 'hundred' if at.minute == 0 else 'oh ' ~ number(at.minute) if at.minute < 10 else number(at.minute) -}}
 {%- endmacro -%}
+
+{#- the lamps among these that Home Assistant can't reach, as a sentence to
+    add to a reply ("The desk lamp isn't responding."), or nothing -#}
+{%- macro offline(lamps) -%}
+  {%- set names = {'light.bed_light': 'bed lamp', 'light.table_light': 'desk lamp',
+       'light.tv_stand_lamp': 'TV lamp'} -%}
+  {%- set ns = namespace(down=[]) -%}
+  {%- for lamp in lamps if states(lamp) in ['unavailable', 'unknown'] -%}
+    {%- set ns.down = ns.down + [names.get(lamp, lamp)] -%}
+  {%- endfor -%}
+  {%- if ns.down | count == 1 -%}
+    The {{ ns.down[0] }} isn't responding.
+  {%- elif ns.down | count > 1 -%}
+    The {{ ns.down[:-1] | join(', the ') }} and the {{ ns.down[-1] }} aren't responding.
+  {%- endif -%}
+{%- endmacro -%}
