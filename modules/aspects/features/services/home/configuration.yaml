@@ -7,6 +7,15 @@ homeassistant:
 frontend:
   themes: !include_dir_merge_named themes
 
+# beside the ui's own dashboards, which stay in storage
+lovelace:
+  dashboards:
+    nix-overview:
+      mode: yaml
+      filename: nix/dashboards/overview.yaml
+      title: Overview
+      icon: mdi:view-dashboard
+
 # the ui edits these three; nix/ holds the ones from nixos-srv
 automation: !include automations.yaml
 script: !include scripts.yaml
