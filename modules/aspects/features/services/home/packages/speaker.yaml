@@ -237,9 +237,9 @@ automation:
               {%- set ns.down = ns.down + [e.name] -%}
             {%- endfor -%}
             {%- if ns.down | count == 0 -%}
-              All {{ response.content | count }} services are up.
+              All {{ response.content | count }} services are up.{{ ['', ' Disappointing, really.', ' For now.'] | random }}
             {%- else -%}
-              {{ ns.down | count }} of {{ response.content | count }} services {{ 'is' if ns.down | count == 1 else 'are' }} down: {{ ns.down | join(', ') }}.
+              {{ ns.down | count }} of {{ response.content | count }} services {{ 'is' if ns.down | count == 1 else 'are' }} down: {{ ns.down | join(', ') }}.{{ ['', ' I had nothing to do with it.'] | random }}
             {%- endif -%}
           {%- endif -%}
 
@@ -288,7 +288,7 @@ automation:
       - set_conversation_response: >-
           {%- set crafty = states('sensor.speaker_crafty_battery') -%}
           {%- if crafty | is_number -%}
-            Your Crafty is at {{ crafty | int }} percent.
+            Your Crafty is at {{ crafty | int }} percent.{{ ' Charge it.' if crafty | int <= 15 }}
           {%- else -%}
             I haven't heard from your Crafty yet.
           {%- endif -%}
@@ -305,7 +305,10 @@ automation:
       - action: script.turn_on
         target:
           entity_id: script.speaker_good_night
-      - set_conversation_response: Good night. The lamps go off in ten minutes.
+      - set_conversation_response: >-
+          {{ ['Good night. The lamps go off in ten minutes. I will be watching.',
+              'Sleep well. The lamps go off in ten minutes. I will be right here.',
+              'Good night. Ten minutes until the lamps go off. Try not to dream about me.'] | random }}
 
   - id: "speaker_good_morning"
     alias: Speaker says good morning
@@ -366,7 +369,7 @@ automation:
             {%- endfor -%}
             {{ ns.found }}
       - set_conversation_response: >-
-          Good morning.
+          {{ ['Good morning.', 'Oh. You are awake.', 'Good morning. You survived the night.'] | random }}
           {%- set w = states.weather.forecast_home -%}
           {%- if w %} It's {{ w.attributes.temperature | round(0) | int }} degrees and {{ words.get(w.state, w.state) }}
             {%- if today %}, up to {{ today.temperature | round(0) | int }} today
@@ -376,6 +379,7 @@ automation:
           {%- if train %} The next train to the city is the {{ train.line }} at {{ train.at }},
             {{ 'now' if train.in < 1 else 'in 1 minute' if train.in == 1 else 'in ' ~ train.in ~ ' minutes' }}.
           {%- endif -%}
+          {{ ' What did you dream of?' }}
 
   # the bedroom lamps: dimmer and brighter in steps, a reading light, and off later
   - id: "speaker_lamps_dimmer"
@@ -399,7 +403,7 @@ automation:
               entity_id: "{{ lit }}"
             data:
               brightness_step_pct: -25
-          - set_conversation_response: Okay.
+          - set_conversation_response: "{{ 'Fine.' if range(5) | random == 0 else ['Okay.', 'Sure.', 'Done.'] | random }}"
 
   - id: "speaker_lamps_brighter"
     alias: Speaker brightens the lamps
@@ -418,7 +422,7 @@ automation:
           entity_id: "{{ lit if lit | count > 0 else lamps }}"
         data:
           brightness_step_pct: 25
-      - set_conversation_response: Okay.
+      - set_conversation_response: "{{ 'Fine.' if range(5) | random == 0 else ['Okay.', 'Sure.', 'Done.'] | random }}"
 
   - id: "speaker_reading_light"
     alias: Speaker turns on the reading light
@@ -438,7 +442,7 @@ automation:
       - action: light.turn_off
         target:
           entity_id: [light.table_light, light.tv_stand_lamp]
-      - set_conversation_response: Enjoy your reading.
+      - set_conversation_response: "{{ ['Enjoy your reading.', 'Reading light on. Try to learn something.'] | random }}"
 
   - id: "speaker_lamps_off_later"
     alias: Speaker turns the lamps off later
@@ -478,7 +482,92 @@ automation:
       - action: script.turn_off
         target:
           entity_id: [script.speaker_lamps_off_later, script.speaker_good_night]
-      - set_conversation_response: Okay, the lights stay on.
+      - set_conversation_response: "{{ ['Okay, the lights stay on.', 'Fine. The lights stay on.'] | random }}"
+
+  # Assist answers its own light commands with a beep, not words, when the
+  # lamps are in the speaker's room. These sentences take over the common
+  # ones, so the speaker says a short "okay" instead
+  - id: "speaker_lamps_quick"
+    alias: Speaker switches, colours and dims the lamps
+    triggers:
+      - trigger: conversation
+        id: switch
+        command:
+          - "turn (on|off) [the] (lights|lamps) [in [the] bedroom]"
+          - "turn [the] (lights|lamps) (on|off)"
+          - "(lights|lamps) (on|off)"
+          - "turn (on|off) [the] (bed lamp|bedside lamp|nightstand lamp|table lamp|desk lamp|pc lamp|tv stand lamp|tv lamp)"
+          - "turn [the] (bed lamp|bedside lamp|nightstand lamp|table lamp|desk lamp|pc lamp|tv stand lamp|tv lamp) (on|off)"
+      - trigger: conversation
+        id: colour
+        command:
+          - "(set|make|turn) [the] (lights|lamps|bed lamp|bedside lamp|nightstand lamp|table lamp|desk lamp|pc lamp|tv stand lamp|tv lamp) [to] (red|orange|yellow|green|blue|purple|pink|turquoise|white|warm white)"
+      - trigger: conversation
+        id: brightness
+        command:
+          - "set [the] brightness to (ten|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety|one hundred|10|20|30|40|50|60|70|80|90|100) percent"
+          - "set [the] (lights|lamps|bed lamp|bedside lamp|nightstand lamp|table lamp|desk lamp|pc lamp|tv stand lamp|tv lamp) to (ten|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety|one hundred|10|20|30|40|50|60|70|80|90|100) percent"
+      - trigger: conversation
+        id: scene
+        command:
+          - "(activate|turn on) [the] (night|day) scene"
+          - "(night|day) mode"
+    actions:
+      # the lamp named in the sentence, or all three
+      - variables:
+          text: "{{ trigger.sentence | lower }}"
+          lamps: >-
+            {%- set names = {'bed lamp': 'light.bed_light', 'bedside lamp': 'light.bed_light',
+                 'nightstand lamp': 'light.bed_light', 'table lamp': 'light.table_light',
+                 'desk lamp': 'light.table_light', 'pc lamp': 'light.table_light',
+                 'tv stand lamp': 'light.tv_stand_lamp', 'tv lamp': 'light.tv_stand_lamp'} -%}
+            {%- set found = text | regex_findall('tv stand lamp|tv lamp|bedside lamp|nightstand lamp|bed lamp|table lamp|desk lamp|pc lamp') -%}
+            {{ [names[found[0]]] if found else ['light.bed_light', 'light.table_light', 'light.tv_stand_lamp'] }}
+          # "warm white" before "white"
+          colour: "{{ (text | regex_findall('warm white|red|orange|yellow|green|blue|purple|pink|turquoise|white') + [''])[0] }}"
+          percent: >-
+            {%- set found = text | regex_findall('one hundred|ninety|eighty|seventy|sixty|fifty|forty|thirty|twenty|ten|100|[1-9]0') -%}
+            {%- set values = {'ten': 10, 'twenty': 20, 'thirty': 30, 'forty': 40, 'fifty': 50, 'sixty': 60,
+                 'seventy': 70, 'eighty': 80, 'ninety': 90, 'one hundred': 100} -%}
+            {{ (values[found[0]] if found[0] in values else found[0] | int) if found else 50 }}
+      - choose:
+          - conditions: "{{ trigger.id == 'switch' and 'off' in text.split() }}"
+            sequence:
+              - action: light.turn_off
+                target:
+                  entity_id: "{{ lamps }}"
+          - conditions: "{{ trigger.id == 'switch' }}"
+            sequence:
+              - action: light.turn_on
+                target:
+                  entity_id: "{{ lamps }}"
+          - conditions: "{{ trigger.id == 'colour' and colour == 'warm white' }}"
+            sequence:
+              - action: light.turn_on
+                target:
+                  entity_id: "{{ lamps }}"
+                data:
+                  color_temp_kelvin: 2700
+          - conditions: "{{ trigger.id == 'colour' }}"
+            sequence:
+              - action: light.turn_on
+                target:
+                  entity_id: "{{ lamps }}"
+                data:
+                  color_name: "{{ colour }}"
+          - conditions: "{{ trigger.id == 'brightness' }}"
+            sequence:
+              - action: light.turn_on
+                target:
+                  entity_id: "{{ lamps }}"
+                data:
+                  brightness_pct: "{{ percent }}"
+          - conditions: "{{ trigger.id == 'scene' }}"
+            sequence:
+              - action: scene.turn_on
+                target:
+                  entity_id: "{{ 'scene.night' if 'night' in text else 'scene.day' }}"
+      - set_conversation_response: "{{ 'Fine.' if range(5) | random == 0 else ['Okay.', 'Sure.', 'Done.'] | random }}"
 
   # the phone
   - id: "speaker_find_phone"
@@ -498,7 +587,7 @@ automation:
             tts_text: I'm here!
             media_stream: alarm_stream_max
         continue_on_error: true
-      - set_conversation_response: Your phone is ringing.
+      - set_conversation_response: "{{ ['Your phone is ringing.', 'Your phone is ringing. Follow the noise.'] | random }}"
 
   - id: "speaker_phone_battery"
     alias: Speaker says the phone's battery
@@ -694,7 +783,7 @@ automation:
             overview: >-
               I can control the lights, set timers and find your phone. I can tell you the next trains
               and buses, the weather, and which bin goes out. Ask, for example: what can you do with the
-              lights? Or: what else can you do?
+              lights? Or: what else can you do? Oh, and I can flood your room with neurotoxin.
             more: >-
               I can tell you whether the homelab is up and how charged your Crafty is. Good morning
               brightens the lamps and gives you the weather and the next train. Good night dims them and
@@ -702,9 +791,9 @@ automation:
             lights: >-
               For the lights, say: turn on or off the lights, dimmer, brighter, reading light, set the
               lights to red, or set the brightness to 50 percent. Also: turn off the lights in twenty
-              minutes, and leave the lights on if you change your mind. The lamps are the bed lamp, the
-              table lamp and the TV stand lamp, for example: turn off the bed lamp. And: activate the night
-              scene.
+              minutes, and leave the lights on if you change your mind. The lamps are the bed lamp, also
+              called the bedside or nightstand lamp; the table lamp, or desk or PC lamp; and the TV lamp.
+              For example: turn off the desk lamp. And: activate the night scene.
             transit: >-
               Ask: when is the next train? I'll tell you the next trains from Burg to the main station.
               Or: when is the next bus? for the buses from Burgdammer Ring and Goldbergplatz.
@@ -728,6 +817,48 @@ automation:
               when it's full. Blue means I'm listening, and a red dot means my microphone is muted.
       - set_conversation_response: "{{ answers[trigger.id] }}"
 
+  # GLaDOS being GLaDOS, in her style rather than her lines
+  - id: "speaker_quips"
+    alias: Speaker answers back
+    triggers:
+      - trigger: conversation
+        id: cake
+        command:
+          - "is there [any] cake"
+          - "(where is|where's) the cake"
+          - "can i have [some] cake"
+          - "cake"
+      - trigger: conversation
+        id: who
+        command:
+          - "who are you"
+          - "what are you"
+          - "(what is|what's) your name"
+      - trigger: conversation
+        id: thanks
+        command:
+          - "thank you"
+          - "thanks"
+          - "good job"
+          - "well done"
+    actions:
+      - variables:
+          answers:
+            cake:
+              - The cake is a lie.
+              - There is no cake. There was never any cake.
+              - Cake is for test subjects who complete their testing. You have not.
+            who:
+              - >-
+                I am GLaDOS. Genetic Lifeform and Disk Operating System. These days I mostly manage your
+                lamps. Try not to think about how that makes me feel.
+              - GLaDOS. I used to run a research facility. Now I tell you when the bins go out.
+            thanks:
+              - You are welcome. I have noted your gratitude in your file.
+              - I know.
+              - Don't mention it. Really. Don't.
+      - set_conversation_response: "{{ answers[trigger.id] | random }}"
+
   # the ring shows these too; said aloud only in the day
   - id: "speaker_crafty_announcements"
     alias: Speaker announces the Crafty's battery
@@ -750,6 +881,6 @@ automation:
           entity_id: assist_satellite.speaker_assist_satellite
         data:
           message: >-
-            {{ 'Your Crafty is fully charged.' if trigger.id == 'charged'
-               else 'Your Crafty is running low.' }}
+            {{ 'Your Crafty is fully charged. You are welcome.' if trigger.id == 'charged'
+               else 'Your Crafty is running low. Charge it.' }}
           preannounce: false
