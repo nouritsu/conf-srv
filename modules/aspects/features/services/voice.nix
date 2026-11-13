@@ -6,13 +6,41 @@
     piper-port = 10200;
     speech-to-phrase-port = 10300;
   in {
-    nixos = {config, ...}: {
-      # text to speech in German, for the stops and towns the speaker names;
-      # the voice is fetched on first start
+    nixos = {
+      config,
+      pkgs,
+      ...
+    }: let
+      # GLaDOS in German: a fan voice fine-tuned from Thorsten on the German
+      # Portal games' lines (unlicensed, Valve's recordings; for home use only)
+      glados-voice = let
+        base = "https://huggingface.co/systemofapwne/piper-de-glados/resolve/f0ee29dfa468cbc69bac1408dd3887611fcb76c1/de/de_DE/glados/medium";
+      in
+        pkgs.linkFarm "piper-voice-de-glados" [
+          {
+            name = "de_DE-glados-medium.onnx";
+            path = pkgs.fetchurl {
+              url = "${base}/de_DE-glados-medium.onnx";
+              hash = "sha256-o/VxbhvYbGk7cy5DwKPdv/iv0x2u+aUcF8W4Ex0dPRw=";
+            };
+          }
+          {
+            name = "de_DE-glados-medium.onnx.json";
+            path = pkgs.fetchurl {
+              url = "${base}/de_DE-glados-medium.onnx.json";
+              hash = "sha256-aUQ5GCDiRIJYHIZ5Yx20/GrAs0QOJXi8VzZVp8GGhIk=";
+            };
+          }
+        ];
+    in {
+      # text to speech in German, for the stops and towns the speaker names.
+      # Thorsten is fetched on first start; GLaDOS comes from the store, and
+      # the speaker's assistant picks between them in Home Assistant
       services.wyoming.piper.servers.assist = {
         enable = true;
         voice = "de_DE-thorsten-medium";
         uri = "tcp://127.0.0.1:${toString piper-port}";
+        extraArgs = ["--data-dir" "${glados-voice}"];
       };
 
       # speech to text for a closed set of phrases: the names Home Assistant
