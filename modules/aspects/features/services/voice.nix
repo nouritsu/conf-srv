@@ -45,6 +45,14 @@
         dependsOn = ["home-assistant"];
       };
 
+      # Home Assistant listens a minute or so after its container starts, and
+      # until then speech-to-phrase exits; it keeps trying instead of giving up
+      # after five quick restarts
+      systemd.services.podman-speech-to-phrase = {
+        serviceConfig.RestartSec = "30s";
+        unitConfig.StartLimitIntervalSec = 0;
+      };
+
       # owned like /data itself: tmpfiles won't create folders inside a root
       # owned one there ("unsafe path transition")
       systemd.tmpfiles.rules = [
