@@ -50,7 +50,7 @@ in {
       };
 
       virtualisation.oci-containers.containers.documenso = {
-        image = "documenso/documenso:latest@sha256:d9985f66c19c59128f64b1439f057683da0110deb0e518655b97f06e3141f173";
+        image = "documenso/documenso:latest@sha256:f9976d2142d34ee89506e161b0a5ec859a0c327f3fe0a398b46d3941fc8dd35e";
         dependsOn = ["documenso-db"];
         ports = ["127.0.0.1:${toString port}:3000"];
         environment = {
