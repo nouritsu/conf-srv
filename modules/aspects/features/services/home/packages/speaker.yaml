@@ -625,6 +625,118 @@ automation:
           Die Sonne geht {{ 'heute' if at.date() == now().date() else 'morgen' }} um {{ at.hour }} Uhr
           {{- ' ' ~ at.minute if at.minute }} {{ 'unter' if trigger.id == 'setting' else 'auf' }}.
 
+  # "Was kannst du?" names the topics; "Was kannst du mit dem Licht machen?"
+  # and the like name the sentences for one. Keep these in step with the
+  # sentences above and Assist's own
+  - id: "speaker_help"
+    alias: Speaker says what it can do
+    triggers:
+      - trigger: conversation
+        id: overview
+        command:
+          - "was kannst du [alles] [machen|tun]"
+          - "wobei kannst du [mir] helfen"
+          - "was kann ich dich fragen"
+          - "hilfe"
+      - trigger: conversation
+        id: more
+        command:
+          - "was kannst du (sonst|noch|sonst noch) [machen|tun]"
+          - "was noch"
+      - trigger: conversation
+        id: lights
+        command:
+          - "was kannst du (mit|zu|bei|beim|zum) [dem|den|der] (licht|lampen|beleuchtung) [machen|tun|sagen]"
+          - "was kann ich (zu|zum|zur|zu den) (licht|lampen|beleuchtung) sagen"
+          - "hilfe (zu|zum|zur|für|für das|für die) (licht|lampen|beleuchtung)"
+      - trigger: conversation
+        id: transit
+        command:
+          - "was kannst du (mit|zu|bei|beim|zum|zur) [dem|den|der] (zug|zügen|bahn|bus|bussen) [machen|tun|sagen]"
+          - "was kann ich (zu|zum|zur|zu den) (zug|zügen|bahn|bus|bussen) sagen"
+          - "hilfe (zu|zum|zur|für|für den|für die) (zug|zügen|bahn|bus|bussen)"
+      - trigger: conversation
+        id: weather
+        command:
+          - "was kannst du (mit|zu|bei|beim|zum|zur) [dem|der] (wetter|sonne) [machen|tun|sagen]"
+          - "was kann ich (zu|zum|zur) (wetter|sonne) sagen"
+          - "hilfe (zu|zum|zur|für|für das|für die) (wetter|sonne)"
+      - trigger: conversation
+        id: bins
+        command:
+          - "was kannst du (mit|zu|bei|beim|zum|zur) [dem|den|der] (müll|müllabfuhr|tonnen|mülltonnen) [machen|tun|sagen]"
+          - "was kann ich (zu|zum|zur|zu den) (müll|müllabfuhr|tonnen|mülltonnen) sagen"
+          - "hilfe (zu|zum|zur|für|für den|für die) (müll|müllabfuhr|tonnen|mülltonnen)"
+      - trigger: conversation
+        id: timers
+        command:
+          - "was kannst du (mit|zu|bei|beim|zum) [dem|den] (timer|timern) [machen|tun|sagen]"
+          - "was kann ich (zu|zum|zu den) (timer|timern) sagen"
+          - "hilfe (zu|zum|für|für den|für die) (timer|timern)"
+      - trigger: conversation
+        id: phone
+        command:
+          - "was kannst du (mit|zu|bei|beim|zum) [dem|meinem] handy [machen|tun|sagen]"
+          - "was kann ich (zu|zum|zu meinem) handy sagen"
+          - "hilfe (zu|zum|für|für das|für mein) handy"
+      - trigger: conversation
+        id: keys
+        command:
+          - "was machen (die|deine) (tasten|knöpfe)"
+          - "was macht (der|dein) knopf"
+          - "hilfe (zu|zu den|für die) (tasten|knöpfen)"
+      - trigger: conversation
+        id: colours
+        command:
+          - "was bedeuten (die|deine) farben"
+          - "was bedeutet (die|deine) farbe"
+          - "was zeigt dein (ring|licht)"
+    actions:
+      - variables:
+          answers:
+            overview: >-
+              Ich kann das Licht steuern, Timer stellen und dein Handy finden. Ich sage dir die nächsten
+              Züge und Busse, das Wetter und welche Tonne raus muss. Frag zum Beispiel: Was kannst du mit
+              dem Licht machen? Oder: Was kannst du sonst noch?
+            more: >-
+              Ich sage dir, ob das Homelab läuft und wie voll dein Crafty ist. Bei Guten Morgen mache ich
+              das Licht hell und sage dir das Wetter und den nächsten Zug. Bei Gute Nacht dimme ich die
+              Lampen und mache sie nach zehn Minuten aus. Und frag mich nach meinen Tasten oder den Farben
+              meines Rings.
+            lights: >-
+              Beim Licht kannst du sagen: Licht an oder aus, dunkler, heller, Leselicht, stell die
+              Lichter auf rot, oder stell die Helligkeit auf 50 Prozent. Auch: Licht aus in zwanzig
+              Minuten, und Licht anlassen, wenn du es dir anders überlegst. Die Lampen heißen Bettlampe,
+              Tischlampe und Fernsehlampe, zum Beispiel: Schalte die Bettlampe aus. Und: Aktiviere die
+              Nacht Szene.
+            transit: >-
+              Frag: Wann fährt der nächste Zug? Dann nenne ich dir die nächsten Bahnen ab Burg zum
+              Hauptbahnhof. Oder: Wann fährt der nächste Bus? Dann nenne ich die Busse ab Burgdammer Ring
+              und Goldbergplatz.
+            weather: >-
+              Frag: Wie ist das Wetter? Wie wird das Wetter morgen? Regnet es heute? Oder: Wann geht die
+              Sonne unter?
+            bins: >-
+              Frag: Welche Tonne muss morgen raus? Am Nachmittag vor der Abholung leuchtet mein Ring
+              außerdem in der Farbe der Tonne.
+            timers: >-
+              Sag: Stelle einen Timer auf zehn Minuten. Oder: Wie lange läuft der Timer noch? Und: Stoppe
+              den Timer. Mein Ring zeigt in gelb, wie viel Zeit noch bleibt. Wenn er klingelt, sag einfach
+              Stopp.
+            phone: >-
+              Frag: Wo ist mein Handy? Dann klingelt es laut, auch wenn es stumm ist. Oder: Wie voll ist
+              mein Handy?
+            keys: >-
+              Drück die Aktionstaste einmal, um mit mir zu sprechen oder mich zu unterbrechen, zweimal, um
+              die Lampen an oder aus zu machen, und halte sie, um mein Mikrofon stumm zu schalten. Die
+              anderen beiden Tasten machen mich lauter und leiser.
+            colours: >-
+              Wenn ich still bin, zeigt mein Ring: weiß, grün, oder blau und gelb für die Tonne, die
+              morgen raus muss; lila, wenn im Homelab etwas ausgefallen ist; orange, wenn dein Crafty fast
+              leer ist, und türkis, wenn er voll ist. Blau heißt, ich höre zu, und ein roter Punkt, dass
+              mein Mikrofon stumm ist.
+      - set_conversation_response: "{{ answers[trigger.id] }}"
+
   # the ring shows these too; said aloud only in the day
   - id: "speaker_crafty_announcements"
     alias: Speaker announces the Crafty's battery
