@@ -12,7 +12,7 @@ in {
       imports = [(den.lib.homelab.via-gluetun "sonarr")];
 
       virtualisation.oci-containers.containers.sonarr = {
-        image = "lscr.io/linuxserver/sonarr:latest@sha256:889dcc58c6aea859033985894b519b2e6b1e55d92527ed123f9f52e42ae7c97b";
+        image = "lscr.io/linuxserver/sonarr:latest@sha256:c7d1df25e428da6c9ace05daea0d34e59522978a3843ea1944812f855af4086c";
         volumes = ["/data/sonarr:/config" "/media/download:/data" "/media/media:/media"];
       };
 
