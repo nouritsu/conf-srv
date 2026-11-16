@@ -311,17 +311,20 @@ automation:
       - action: script.turn_on
         target:
           entity_id: script.speaker_good_night
+      # with the evening medication second, after the greeting
       - set_conversation_response: >-
           {%- from 'speaker.jinja' import offline -%}
           {%- set down = offline(['light.bed_light', 'light.table_light', 'light.tv_stand_lamp']) -%}
-          {{ ['Good night. The lamps go off in ten minutes. I will be watching.',
-              'Sleep well. The lamps go off in ten minutes. I will be right here.',
-              'Good night. Ten minutes until the lamps go off. Try not to dream about me.'] | random }}
+          {%- set pills = ["Take your medication first.", "Don't forget your medication.",
+               "Medication, then sleep. In that order."] | random -%}
+          {{ ['Good night. ' ~ pills ~ ' The lamps go off in ten minutes. I will be watching.',
+              'Sleep well. ' ~ pills ~ ' The lamps go off in ten minutes. I will be right here.',
+              'Good night. ' ~ pills ~ ' Ten minutes until the lamps go off. Try not to dream about me.'] | random }}
           {{- ' ' ~ down if down }}
 
   - id: "speaker_good_morning"
     alias: Speaker says good morning
-    description: The Day scene, the weather, and the next train
+    description: The Day scene, the weather, the next train, and the morning medication
     triggers:
       - trigger: conversation
         command: "good morning"
@@ -389,7 +392,9 @@ automation:
           {%- if train %} The next train to the city is the {{ train.line }} at {{ train.at }},
             {{ 'now' if train.in < 1 else 'in 1 minute' if train.in == 1 else 'in ' ~ train.in ~ ' minutes' }}.
           {%- endif -%}
-          {{ ' What did you dream of?' }}
+          {{ ' ' ~ ["Take your medication.", "Don't forget your morning medication.",
+                    "Take your medication. I need you in working order."] | random }}
+          {{- ' What did you dream of?' }}
 
   # the bedroom lamps: dimmer and brighter in steps, a reading light, and off later
   - id: "speaker_lamps_dimmer"
