@@ -298,10 +298,21 @@ automation:
           - "is (my|the) crafty charged"
           - "crafty battery"
     actions:
+      # the speaker reads it only while it's on, so the value can be old:
+      # past half an hour, she says how old
       - set_conversation_response: >-
           {%- set crafty = states('sensor.speaker_crafty_battery') -%}
+          {%- set seen = states('sensor.speaker_crafty_last_read') | as_datetime(none) -%}
           {%- if crafty | is_number -%}
-            Your Crafty is at {{ crafty | int }} percent.{{ ' Charge it.' if crafty | int <= 15 }}
+            {%- set mins = ((now() - seen).total_seconds() / 60) | int if seen else 0 -%}
+            {%- if mins < 30 -%}
+              Your Crafty is at {{ crafty | int }} percent.{{ ' Charge it.' if crafty | int <= 15 }}
+            {%- else -%}
+              {%- set ago = 'half an hour ago' if mins < 60 else 'an hour ago' if mins < 120
+                   else (mins // 60) ~ ' hours ago' if mins < 1440 else 'yesterday' if mins < 2880
+                   else (mins // 1440) ~ ' days ago' -%}
+              Your Crafty was at {{ crafty | int }} percent {{ ago }}. Switch it on and I'll look again.
+            {%- endif -%}
           {%- else -%}
             I haven't heard from your Crafty yet.
           {%- endif -%}
