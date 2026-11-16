@@ -12,7 +12,7 @@ in {
       imports = [(den.lib.homelab.via-gluetun "radarr")];
 
       virtualisation.oci-containers.containers.radarr = {
-        image = "lscr.io/linuxserver/radarr:latest@sha256:fc0ae3c50f8128b97e84381903ec8d6845c3a569641cb7117c124376cccb57c1";
+        image = "lscr.io/linuxserver/radarr:latest@sha256:044788f5508b7f67a3e0368cdd142c77c4d4cd5aec2efaba53e1a68b6b6231e7";
         volumes = ["/data/radarr:/config" "/media/download:/data" "/media/media:/media"];
       };
 
