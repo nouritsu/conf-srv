@@ -39,6 +39,8 @@
         "d /data/homeassistant/nix/dashboards 0775 1000 data -"
         # jinja macros templates import, such as the speaker's clock times
         "d /data/homeassistant/custom_templates 0775 1000 data -"
+        # the speaker's voice commands as audio, deleted after a week
+        "d /data/homeassistant/voice-recordings 0775 1000 data 7d"
       ];
 
       # the bin calendar's source, which names the address; the rest of the bins

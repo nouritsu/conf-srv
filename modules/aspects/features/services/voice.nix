@@ -59,11 +59,14 @@
       virtualisation.oci-containers.containers.speech-to-phrase = {
         image = "rhasspy/wyoming-speech-to-phrase:1.4.3@sha256:85580e14114b866f5ccd6ed856b0b97f634d8d0936ed7e31edc7822840327422";
         environmentFiles = [config.sops.templates."speech-to-phrase.env".path];
-        # the image's run.sh passes these on; a later --uri overrides its own
         entrypoint = "bash";
         # Home Assistant answers on its websocket before it has loaded the
         # automations whose sentences this learns, and training then would
-        # leave them out; it waits until Home Assistant says it is running
+        # leave them out; it waits until Home Assistant says it is running.
+        # Then it starts as the image's run.sh would, but logs what it heard
+        # for each command: the three likeliest word strings, how far the
+        # best is from a known sentence, and the sentence it answered (or
+        # none). --debug would log that too, with the token among its args
         cmd = [
           "-c"
           ''
@@ -72,8 +75,18 @@
             q = r.Request("http://127.0.0.1:8123/api/config", headers={"Authorization": "Bearer " + os.environ["HASS_TOKEN"]})
             raise SystemExit(json.load(r.urlopen(q, timeout=5)).get("state") != "RUNNING")
             ' 2>/dev/null; do sleep 5; done
-            exec bash /run.sh \
+            cd /usr/src
+            exec .venv/bin/python3 -c '
+            import asyncio, logging
+            from speech_to_phrase.__main__ import main
+            for heard in ("speech_to_phrase.transcribe_kaldi", "speech_to_phrase.event_handler"):
+                logging.getLogger(heard).setLevel(logging.DEBUG)
+            asyncio.run(main())
+            ' \
               --uri tcp://127.0.0.1:${toString speech-to-phrase-port} \
+              --models-dir /models \
+              --train-dir /train \
+              --tools-dir ./tools \
               --hass-websocket-uri ws://127.0.0.1:8123/api/websocket \
               --hass-token "$HASS_TOKEN" \
               --retrain-on-start \
