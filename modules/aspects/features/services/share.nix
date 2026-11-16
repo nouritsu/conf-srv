@@ -19,7 +19,7 @@
       };
 
       virtualisation.oci-containers.containers.enclosed = {
-        image = "corentinth/enclosed:latest@sha256:d1e78c34ae7027c0c7b7a9ba67f352520049b9f260560fb8a0b3b1c55488cdc8";
+        image = "corentinth/enclosed:latest@sha256:e65f73b085823ceeab1a39c515614c1a24e9b5c69b8e1221d3d7071a4f8bc4a8";
         ports = ["${toString port}:8787"];
         environment.PUBLIC_IS_AUTHENTICATION_REQUIRED = "true";
         environmentFiles = [config.sops.templates."enclosed.env".path];
