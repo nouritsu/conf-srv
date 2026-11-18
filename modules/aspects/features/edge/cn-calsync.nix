@@ -1,4 +1,4 @@
-let
+{den, ...}: let
   state-dir = "/var/lib/cn-calsync";
 in {
   # campusnet's schedule as ics feeds, one per event type, for proton calendar to subscribe to
@@ -32,7 +32,10 @@ in {
         feed-token = "cn-calsync/feed-token";
       };
     in {
-      sops.secrets = lib.mapAttrs' (_: s: lib.nameValuePair s {}) secrets;
+      sops.secrets =
+        lib.mapAttrs' (_: s: lib.nameValuePair s {}) secrets
+        # the homelab's Home Assistant reads the feeds with it too
+        // {${secrets.feed-token}.sopsFile = den.lib.homelab.shared-secrets;};
 
       # static rather than DynamicUser: caddy can't reach /var/lib/private
       users.users.cn-calsync = {

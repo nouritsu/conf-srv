@@ -29,3 +29,86 @@
     The {{ ns.down[:-1] | join(', the ') }} and the {{ ns.down[-1] }} aren't responding.
   {%- endif -%}
 {%- endmacro -%}
+
+{#- "a", "a and b", "a, b and c" -#}
+{%- macro listing(items) -%}
+  {{- items[0] if items | count == 1 else items[:-1] | join(', ') ~ ' and ' ~ items[-1] if items -}}
+{%- endmacro -%}
+
+{#- clauses as one sentence, its first letter capitalised, or nothing -#}
+{%- macro sentence(clauses) -%}
+  {%- set s = listing(clauses) -%}
+  {{- s[:1] | upper ~ s[1:] ~ '.' if s -}}
+{%- endmacro -%}
+
+{%- macro ordinal(n) -%}
+  {{- n ~ ('th' if n % 100 in [11, 12, 13] else {1: 'st', 2: 'nd', 3: 'rd'}.get(n % 10, 'th')) -}}
+{%- endmacro -%}
+
+{#- Calendar events, as calendar.get_events returns them: start and end are
+    "2026-11-19T09:45:00+01:00", or "2026-11-19" for a whole day.
+
+    When an event is: "today", "tomorrow", "on Thursday" within the week, or
+    "on December 14th" -#}
+{%- macro day(start) -%}
+  {%- set d = strptime(start[:10], '%Y-%m-%d').date() -%}
+  {%- set ahead = (d - now().date()).days -%}
+  {{- 'today' if ahead == 0 else 'tomorrow' if ahead == 1 else 'on ' ~ d.strftime('%A') if 1 < ahead < 7
+      else 'on ' ~ d.strftime('%B') ~ ' ' ~ ordinal(d.day) -}}
+{%- endmacro -%}
+
+{#- a CampusNet class or exam without its course code: "Algorithms Lecture",
+    or for "[EXAM] Algorithms (CO-520)" "Algorithms" -#}
+{%- macro course_name(e) -%}
+  {{- e.summary | regex_replace('^\\[EXAM\\] *', '') | regex_replace(' *[(][^)]*[)]$', '') -}}
+{%- endmacro -%}
+
+{#- "Algorithms Lecture at nine forty-five", "the Algorithms exam at nine" -#}
+{%- macro course(e) -%}
+  {%- set at = clock(e.start | as_datetime) -%}
+  {{- 'the ' ~ course_name(e) ~ ' exam at ' ~ at if e.summary.startswith('[EXAM]') else course_name(e) ~ ' at ' ~ at -}}
+{%- endmacro -%}
+
+{#- a holiday without what's in brackets, "Diwali (Bali Pratipada); Govardhan
+    Puja" as "Diwali and Govardhan Puja" -#}
+{%- macro holiday_name(e) -%}
+  {{- listing((e.summary | regex_replace(' *[(][^)]*[)]', '')).split('; ') | unique | list) -}}
+{%- endmacro -%}
+
+{#- "Today is Christmas Day in Bremen and Christmas in Pune.", or nothing;
+    when is "today" or "tomorrow" -#}
+{%- macro holidays(when, bremen, pune) -%}
+  {%- set ns = namespace(said=[]) -%}
+  {%- for e in bremen -%}
+    {%- set ns.said = ns.said + [holiday_name(e) ~ ' in Bremen'] -%}
+  {%- endfor -%}
+  {%- for e in pune -%}
+    {%- set ns.said = ns.said + [holiday_name(e) ~ ' in Pune'] -%}
+  {%- endfor -%}
+  {{- when | capitalize ~ ' is ' ~ ns.said | join(' and ') ~ '.' if ns.said -}}
+{%- endmacro -%}
+
+{#- a date from the birthdays calendar ("🎂 Name", "💍 Name & Name",
+    "📅 Name: Label", described "born 1996" or "since 2010") with when it is:
+    "Alice Smith turns 30 tomorrow", "Bob's birthday is on Saturday",
+    "Ann and Tom's 16th anniversary is today" -#}
+{%- macro occasion(e) -%}
+  {%- set when = day(e.start) -%}
+  {%- set icon = e.summary[:1] -%}
+  {%- set rest = e.summary[2:] if e.summary[1:2] == ' ' else e.summary -%}
+  {%- set names = rest.split(': ')[0] | replace(' & ', ' and ') -%}
+  {%- set label = rest.split(': ', 1)[1] if ': ' in rest else '' -%}
+  {%- set years = (e.description or '') | regex_findall('[0-9]{4}') -%}
+  {%- set age = (e.start[:4] | int) - (years[0] | int) if years else 0 -%}
+  {%- if icon == '🎂' and age > 0 -%}
+    {{ names }} {{ 'turn' if ' and ' in names else 'turns' }} {{ age }} {{ when }}
+  {%- elif icon == '🎂' -%}
+    {{ names }}'s birthday is {{ when }}
+  {%- elif icon == '💍' -%}
+    {{ names }}'s {{ ordinal(age) ~ ' ' if age > 0 }}anniversary is {{ when }}
+  {%- elif label -%}
+    {{ names }}'s {{ label }} is {{ when }}
+  {%- else -%}
+    {{ rest }} is {{ when }}
+  {%- endif -%}
+{%- endmacro -%}

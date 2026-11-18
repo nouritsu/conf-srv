@@ -38,3 +38,10 @@ creation_rules:
           - *homelab
           - *pc
           - *laptop
+  # sounds from Portal 2 for the speaker: Valve's, so not for a public repo in the clear
+  - path_regex: services/home/sounds/[^/]+\.enc$
+    key_groups:
+      - age:
+          - *homelab
+          - *pc
+          - *laptop

@@ -112,6 +112,43 @@ script:
         target:
           entity_id: [light.bed_light, light.table_light, light.tv_stand_lamp]
 
+  # every unprompted announcement goes through here: Portal's PA chime first
+  # (www/speaker, from home.nix), so headphones or a conversation get a
+  # moment's warning. Waits until the speaker isn't talking with you
+  speaker_announce:
+    alias: Speaker announces
+    mode: queued
+    fields:
+      message:
+        description: What the speaker says after the chime
+        example: Your Crafty is fully charged.
+    sequence:
+      - wait_template: "{{ is_state('assist_satellite.speaker_assist_satellite', 'idle') }}"
+        timeout: "00:02:00"
+      - action: assist_satellite.announce
+        target:
+          entity_id: assist_satellite.speaker_assist_satellite
+        data:
+          message: "{{ message }}"
+          preannounce: true
+          preannounce_media_id: /local/speaker/announcement-chime.ogg
+
+  # PotatOS' slow clap and the line after it (www/speaker), played once the
+  # voice command that asked for it has ended
+  speaker_slow_clap:
+    alias: Speaker starts a slow clap
+    mode: single
+    sequence:
+      - wait_template: "{{ is_state('assist_satellite.speaker_assist_satellite', 'idle') }}"
+        timeout: "00:00:30"
+        continue_on_timeout: false
+      - action: assist_satellite.announce
+        target:
+          entity_id: assist_satellite.speaker_assist_satellite
+        data:
+          media_id: /local/speaker/slow-clap.ogg
+          preannounce: false
+
 automation:
   - id: "speaker_action_key_double_press"
     alias: Speaker action key toggles the lamps
@@ -342,7 +379,7 @@ automation:
 
   - id: "speaker_good_morning"
     alias: Speaker says good morning
-    description: The Day scene, the weather, the next train, and the morning medication
+    description: The Day scene, the weather, the next train, today's exams, first class and birthdays, and the morning medication
     triggers:
       - trigger: conversation
         command: "good morning"
@@ -364,6 +401,37 @@ automation:
       - action: rest_command.departures_burg
         response_variable: response
         continue_on_error: true
+      - action: calendar.get_events
+        target:
+          entity_id: [calendar.campusnet_lectures, calendar.campusnet_tutorials, calendar.campusnet_exams,
+                      calendar.campusnet_other, calendar.birthdays]
+        data:
+          start_date_time: "{{ today_at() }}"
+          end_date_time: "{{ today_at() + timedelta(days=1) }}"
+        response_variable: agenda
+        continue_on_error: true
+      - variables:
+          # today's exams, the first class still to come, and the birthdays
+          plan: >-
+            {%- from 'speaker.jinja' import course, occasion, sentence, listing -%}
+            {%- set cal = agenda if agenda is defined else {} -%}
+            {%- set ns = namespace(exams=[], classes=[], dates=[]) -%}
+            {%- for e in cal.get('calendar.campusnet_exams', {}).get('events', []) | sort(attribute='start')
+                  if (e.end | as_datetime) > now() -%}
+              {%- set ns.exams = ns.exams + [course(e)] -%}
+            {%- endfor -%}
+            {%- for id in ['calendar.campusnet_lectures', 'calendar.campusnet_tutorials', 'calendar.campusnet_other'] -%}
+              {%- for e in cal.get(id, {}).get('events', []) if (e.end | as_datetime) > now() -%}
+                {%- set ns.classes = ns.classes + [e] -%}
+              {%- endfor -%}
+            {%- endfor -%}
+            {%- for e in cal.get('calendar.birthdays', {}).get('events', []) -%}
+              {%- set ns.dates = ns.dates + [occasion(e)] -%}
+            {%- endfor -%}
+            {%- set first = (ns.classes | sort(attribute='start') | first) if ns.classes else none -%}
+            {{ [('You have ' ~ listing(ns.exams) ~ '. Good luck. You will need it.') if ns.exams else '',
+                ('Your first class is ' ~ course(first) ~ '.') if first else '',
+                sentence(ns.dates)] | reject('eq', '') | join(' ') }}
       - variables:
           words: &weather_words
             clear-night: clear
@@ -410,6 +478,7 @@ automation:
           {%- if train %} The next train to the city is the {{ train.line }} at {{ train.at }},
             {{ 'now' if train.in < 1 else 'in 1 minute' if train.in == 1 else 'in ' ~ train.in ~ ' minutes' }}.
           {%- endif -%}
+          {{- ' ' ~ plan if plan }}
           {{ ' ' ~ ["Take your medication.", "Don't forget your morning medication.",
                     "Take your medication. I need you in working order."] | random }}
           {{- ' What did you dream of?' }}
@@ -822,6 +891,264 @@ automation:
           {%- from 'speaker.jinja' import clock -%}
           It's {{ clock(now()) }}.
 
+  # the calendars (ics_feed, in calendars.yaml from home.nix): CampusNet's
+  # classes and exams, the contacts' birthdays, and the holidays in Bremen
+  # and Pune. "What's on today" names the holidays, the birthdays and the
+  # exams and classes still to come; for tomorrow, all of them
+  - id: "speaker_calendar_day"
+    alias: Speaker says what's on today or tomorrow
+    triggers:
+      - trigger: conversation
+        id: today
+        command:
+          - "(what's|what is) [on|happening] today"
+          - "what do i have today"
+      - trigger: conversation
+        id: tomorrow
+        command:
+          - "(what's|what is) [on|happening] tomorrow"
+          - "what do i have tomorrow"
+    actions:
+      - action: calendar.get_events
+        target:
+          entity_id: [calendar.campusnet_lectures, calendar.campusnet_tutorials, calendar.campusnet_exams,
+                      calendar.campusnet_other, calendar.birthdays, calendar.holidays_in_bremen,
+                      calendar.holidays_in_pune]
+        data:
+          start_date_time: "{{ today_at() + timedelta(days=0 if trigger.id == 'today' else 1) }}"
+          end_date_time: "{{ today_at() + timedelta(days=1 if trigger.id == 'today' else 2) }}"
+        response_variable: agenda
+        continue_on_error: true
+      - set_conversation_response: >-
+          {%- from 'speaker.jinja' import course, holidays, occasion, sentence, listing -%}
+          {%- set when = trigger.id -%}
+          {%- set cal = agenda if agenda is defined else {} -%}
+          {%- set ns = namespace(exams=[], classes=[], over=0, dates=[]) -%}
+          {%- for id in ['calendar.campusnet_exams', 'calendar.campusnet_lectures',
+                         'calendar.campusnet_tutorials', 'calendar.campusnet_other'] -%}
+            {%- for e in cal.get(id, {}).get('events', []) | sort(attribute='start') -%}
+              {%- if when == 'today' and (e.end | as_datetime) <= now() -%}
+                {%- set ns.over = ns.over + 1 -%}
+              {%- elif id == 'calendar.campusnet_exams' -%}
+                {%- set ns.exams = ns.exams + [course(e)] -%}
+              {%- else -%}
+                {%- set ns.classes = ns.classes + [e] -%}
+              {%- endif -%}
+            {%- endfor -%}
+          {%- endfor -%}
+          {%- for e in cal.get('calendar.birthdays', {}).get('events', []) -%}
+            {%- set ns.dates = ns.dates + [occasion(e)] -%}
+          {%- endfor -%}
+          {%- set listed = namespace(items=[]) -%}
+          {%- for e in ns.classes | sort(attribute='start') -%}
+            {%- set listed.items = listed.items + [course(e)] -%}
+          {%- endfor -%}
+          {%- set n = listed.items | count -%}
+          {%- set classes -%}
+            {%- if n -%}
+              You have {{ 'one' if n == 1 else n }} {{ 'more ' if ns.over }}{{ 'class' if n == 1 else 'classes' }} {{ when }}: {{ listing(listed.items) }}.
+            {%- elif ns.over -%}
+              No more classes today.
+            {%- endif -%}
+          {%- endset -%}
+          {%- set said = [holidays(when, cal.get('calendar.holidays_in_bremen', {}).get('events', []),
+                                   cal.get('calendar.holidays_in_pune', {}).get('events', [])),
+                          sentence(ns.dates),
+                          ('You have ' ~ listing(ns.exams) ~ ' ' ~ when ~ '.') if ns.exams else '',
+                          classes] | reject('eq', '') | list -%}
+          {%- set unread = ['calendar.campusnet_lectures', 'calendar.campusnet_tutorials', 'calendar.campusnet_exams',
+                            'calendar.campusnet_other'] | select('is_state', ['unavailable', 'unknown']) | list -%}
+          {%- if said -%}
+            {{ said | join(' ') }}
+          {%- else -%}
+            {{ ['Nothing on ' ~ when ~ '.', 'Your calendar is empty ' ~ when ~ '. Plenty of time for testing.'] | random }}
+          {%- endif -%}
+          {{- " I couldn't read your CampusNet calendar." if unread }}
+
+  - id: "speaker_next_class"
+    alias: Speaker says the next class
+    triggers:
+      - trigger: conversation
+        id: class
+        command:
+          - "(when is|when's|what is|what's) my next class"
+          - "next class"
+      - trigger: conversation
+        id: lecture
+        command:
+          - "(when is|when's|what is|what's) my next lecture"
+          - "next lecture"
+      - trigger: conversation
+        id: tutorial
+        command:
+          - "(when is|when's|what is|what's) my next tutorial"
+          - "next tutorial"
+    actions:
+      - variables:
+          searched: >-
+            {{ {'class': ['calendar.campusnet_lectures', 'calendar.campusnet_tutorials', 'calendar.campusnet_other'],
+                'lecture': ['calendar.campusnet_lectures'],
+                'tutorial': ['calendar.campusnet_tutorials']}[trigger.id] }}
+      - action: calendar.get_events
+        target:
+          entity_id: "{{ searched }}"
+        data:
+          start_date_time: "{{ now() }}"
+          end_date_time: "{{ now() + timedelta(days=30) }}"
+        response_variable: agenda
+        continue_on_error: true
+      - set_conversation_response: >-
+          {%- from 'speaker.jinja' import clock, course_name, day -%}
+          {%- set ns = namespace(next=none) -%}
+          {%- for id in searched -%}
+            {%- for e in (agenda[id].events if agenda is defined and id in agenda else [])
+                  if (e.start | as_datetime) > now() -%}
+              {%- if ns.next is none or (e.start | as_datetime) < (ns.next.start | as_datetime) -%}
+                {%- set ns.next = e -%}
+              {%- endif -%}
+            {%- endfor -%}
+          {%- endfor -%}
+          {%- if ns.next is not none -%}
+            {%- set at = ns.next.start | as_datetime -%}
+            {%- set mins = ((at - now()).total_seconds() / 60) | round(0) | int -%}
+            Your next {{ trigger.id }} is {{ course_name(ns.next) }}, {{ day(ns.next.start) }} at {{ clock(at) }}
+            {{- ', in ' ~ mins ~ (' minute' if mins == 1 else ' minutes') if mins < 60 }}.
+          {%- elif searched | select('is_state', ['unavailable', 'unknown']) | list -%}
+            I couldn't read your CampusNet calendar.
+          {%- else -%}
+            No {{ 'classes' if trigger.id == 'class' else trigger.id ~ 's' }} in the next month.
+          {%- endif -%}
+
+  - id: "speaker_next_exam"
+    alias: Speaker says the next exam
+    triggers:
+      - trigger: conversation
+        command:
+          - "(when is|when's|what is|what's) my next exam"
+          - "next exam"
+          - "do i have (an|any) exams"
+    actions:
+      - action: calendar.get_events
+        target:
+          entity_id: calendar.campusnet_exams
+        data:
+          start_date_time: "{{ now() }}"
+          end_date_time: "{{ now() + timedelta(days=180) }}"
+        response_variable: agenda
+        continue_on_error: true
+      - set_conversation_response: >-
+          {%- from 'speaker.jinja' import clock, course_name, day -%}
+          {%- set exams = (agenda['calendar.campusnet_exams'].events
+               if agenda is defined and 'calendar.campusnet_exams' in agenda else [])
+               | selectattr('start', 'gt', now().isoformat()) | sort(attribute='start') | list -%}
+          {%- if exams -%}
+            {%- set e = exams[0] -%}
+            {%- set ahead = (strptime(e.start[:10], '%Y-%m-%d').date() - now().date()).days -%}
+            Your next exam is {{ course_name(e) }}, {{ day(e.start) }} at {{ clock(e.start | as_datetime) }}.
+            {{- ' That is in ' ~ ahead ~ ' days.' if ahead >= 7 }}
+            {{- ' Good luck. You will need it.' if ahead <= 2 }}
+          {%- elif is_state('calendar.campusnet_exams', ['unavailable', 'unknown']) -%}
+            I couldn't read your CampusNet calendar.
+          {%- else -%}
+            No exams in the next six months. Suspicious.
+          {%- endif -%}
+
+  # the birthdays calendar has the contacts' anniversaries and other dates too
+  - id: "speaker_birthdays"
+    alias: Speaker says the birthdays
+    triggers:
+      - trigger: conversation
+        id: today
+        command:
+          - "(any|are there any) birthdays today"
+          - "whose birthday is it [today]"
+          - "is it anyone's birthday [today]"
+      - trigger: conversation
+        id: week
+        command:
+          - "(any|are there any) birthdays this week"
+          - "whose birthday is (it|coming up) this week"
+          - "upcoming birthdays"
+      - trigger: conversation
+        id: next
+        command:
+          - "whose birthday is next"
+          - "(when is|when's) the next birthday"
+    actions:
+      - action: calendar.get_events
+        target:
+          entity_id: calendar.birthdays
+        data:
+          start_date_time: "{{ today_at() }}"
+          end_date_time: "{{ today_at() + timedelta(days={'today': 1, 'week': 7, 'next': 366}[trigger.id]) }}"
+        response_variable: agenda
+        continue_on_error: true
+      - set_conversation_response: >-
+          {%- from 'speaker.jinja' import occasion, sentence -%}
+          {%- set dates = (agenda['calendar.birthdays'].events
+               if agenda is defined and 'calendar.birthdays' in agenda else []) | sort(attribute='start') -%}
+          {%- if trigger.id == 'next' and dates -%}
+            {%- set dates = dates | selectattr('start', 'eq', dates[0].start) | list -%}
+          {%- endif -%}
+          {%- set ns = namespace(said=[]) -%}
+          {%- for e in dates -%}
+            {%- set ns.said = ns.said + [occasion(e)] -%}
+          {%- endfor -%}
+          {%- if ns.said -%}
+            {{ sentence(ns.said) }}
+          {%- elif is_state('calendar.birthdays', ['unavailable', 'unknown']) -%}
+            I couldn't read the birthdays.
+          {%- else -%}
+            {{ {'today': 'No birthdays today.', 'week': 'No birthdays this week.',
+                'next': 'No birthdays in the next year. Do you have any friends?'}[trigger.id] }}
+          {%- endif -%}
+
+  # the evening before a birthday, so there's time to do something about it
+  - id: "speaker_birthday_announcements"
+    alias: Speaker announces tomorrow's birthdays
+    triggers:
+      - trigger: time
+        at: "21:00:00"
+    actions:
+      - action: calendar.get_events
+        target:
+          entity_id: calendar.birthdays
+        data:
+          start_date_time: "{{ today_at() + timedelta(days=1) }}"
+          end_date_time: "{{ today_at() + timedelta(days=2) }}"
+        response_variable: agenda
+        continue_on_error: true
+      - variables:
+          dates: >-
+            {{ agenda['calendar.birthdays'].events
+               if agenda is defined and 'calendar.birthdays' in agenda else [] }}
+      - condition: template
+        value_template: "{{ dates | count > 0 }}"
+      - action: script.speaker_announce
+        data:
+          message: >-
+            {%- from 'speaker.jinja' import occasion, sentence -%}
+            {%- set ns = namespace(said=[]) -%}
+            {%- for e in dates -%}
+              {%- set ns.said = ns.said + [occasion(e)] -%}
+            {%- endfor -%}
+            {{ sentence(ns.said) }} {{ ["Don't forget. I certainly won't.", "I have already not baked a cake.",
+                                        "Say something nice. You can practise on me."] | random }}
+
+  # PotatOS' slow clap from Portal 2; no reply of its own, the clap is the answer
+  - id: "speaker_slow_clap"
+    alias: Speaker starts a slow clap
+    triggers:
+      - trigger: conversation
+        command:
+          - "(start|initiate) [a|the] slow clap"
+          - "slow clap"
+    actions:
+      - action: script.turn_on
+        target:
+          entity_id: script.speaker_slow_clap
+      - set_conversation_response: ""
+
   # "what can you do" names the topics; "what can you do with the lights" and
   # the like name the sentences for one. Keep these in step with the
   # sentences above and Assist's own
@@ -876,6 +1203,12 @@ automation:
           - "what can i say about [the|my] phone"
           - "help with [the|my] phone"
       - trigger: conversation
+        id: calendar
+        command:
+          - "what can you do with [the|my] (calendar|schedule|classes|birthdays)"
+          - "what can i say about [the|my] (calendar|schedule|classes|birthdays)"
+          - "help with [the|my] (calendar|schedule|classes|birthdays)"
+      - trigger: conversation
         id: keys
         command:
           - "what do [the|your] (buttons|keys) do"
@@ -890,12 +1223,19 @@ automation:
           answers:
             overview: >-
               I can control the lights, set timers and find your phone. I can tell you the next trains
-              and buses, the weather, and which bin goes out. Ask, for example: what can you do with the
-              lights? Or: what else can you do? Oh, and I can flood your room with neurotoxin.
+              and buses, the weather, which bin goes out, and what's on your calendar. Ask, for example:
+              what can you do with the lights? Or: what else can you do? Oh, and I can flood your room
+              with neurotoxin.
             more: >-
               I can tell you whether the homelab is up and how charged your Crafty is. Good morning
-              brightens the lamps and gives you the weather and the next train. Good night dims them and
-              turns them off ten minutes later. And ask me about my buttons or my ring's colours.
+              brightens the lamps and gives you the weather, the next train, your first class and
+              today's birthdays. Good night dims them and turns them off ten minutes later. Say: start
+              a slow clap, when you deserve one. And ask me about my buttons or my ring's colours.
+            calendar: >-
+              Ask: what's on today? Or tomorrow. When is my next class, lecture or tutorial? When is my
+              next exam? Any birthdays today, or this week? Whose birthday is next? I read your CampusNet
+              classes and exams, your contacts' birthdays, and the holidays in Bremen and Pune. The
+              evening before a birthday, I remind you at twenty-one hundred, after a chime.
             lights: >-
               For the lights, say: turn on or off the lights, dimmer, brighter, reading light, set the
               lights to red, or set the brightness to 50 percent. Also: turn off the lights in twenty
@@ -994,11 +1334,8 @@ automation:
         after: "08:00:00"
         before: "22:00:00"
     actions:
-      - action: assist_satellite.announce
-        target:
-          entity_id: assist_satellite.speaker_assist_satellite
+      - action: script.speaker_announce
         data:
           message: >-
             {{ 'Your Crafty is fully charged. You are welcome.' if trigger.id == 'charged'
                else 'Your Crafty is running low. Charge it.' }}
-          preannounce: false
