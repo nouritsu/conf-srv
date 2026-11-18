@@ -28,7 +28,8 @@ in {
         # sshd runs the forced command through the login shell
         shell = pkgs.bashInteractive;
         openssh.authorizedKeys.keys = map (key: ''restrict,command="${pkgs.rrsync}/bin/rrsync -wo ${root}" ${key}'') [
-          # the public half of fast-track's FDROID_SSH_KEY deploy key goes here
+          # the public half of fast-track's FDROID_SSH_KEY secret
+          "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIPvBKUbX3/7sMw9C6DiNxXMGRCRWIgMKKuuWgXvFl0Kk fast-track-fdroid-deploy"
         ];
       };
 
