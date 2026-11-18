@@ -12,7 +12,7 @@ in {
       imports = [(den.lib.homelab.via-gluetun "bindery")];
 
       virtualisation.oci-containers.containers.bindery = {
-        image = "ghcr.io/vavallee/bindery:v1.46.0@sha256:5129bfd5e86641d9f836b7872d6d6dd3fb871c07f3cc3d035d4612a549243b36";
+        image = "ghcr.io/vavallee/bindery:v1.52.0@sha256:100091a1d8247e1f5d0ea8c243b703da5398afa9caa7d3aea237ad4fa468e4d0";
         # distroless: the uid comes from --user, not PUID/PGID
         extraOptions = ["--user=1000:${toString config.users.groups.data.gid}"];
         environment = {
