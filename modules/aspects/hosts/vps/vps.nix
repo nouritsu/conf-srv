@@ -10,6 +10,7 @@
 
       # services
       edge.www
+      edge.fdroid
       edge.headscale
       edge.headplane
       edge.cn-calsync
