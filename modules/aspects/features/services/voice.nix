@@ -35,13 +35,21 @@
             > $out/en_US-glados-medium.onnx.json
         '';
     in {
+      # wyoming-piper says each sentence on its own and joins them with only
+      # the ~0.1 s the voice trails off with, which runs sentences together
+      # ("Take your medication. What did you dream of?"); patched, it puts
+      # --sentence-silence between them, never before the first or after the last
+      services.wyoming.piper.package = pkgs.wyoming-piper.overridePythonAttrs (old: {
+        patches = (old.patches or []) ++ [./wyoming-piper-sentence-silence.patch];
+      });
+
       # text to speech, in GLaDOS' voice from the store; Home Assistant can
       # still ask for any other Piper voice, which is fetched on first use
       services.wyoming.piper.servers.assist = {
         enable = true;
         voice = "en_US-glados-medium";
         uri = "tcp://127.0.0.1:${toString piper-port}";
-        extraArgs = ["--data-dir" "${glados-voice}"];
+        extraArgs = ["--data-dir" "${glados-voice}" "--sentence-silence" "0.4"];
       };
 
       # speech to text for a closed set of phrases: the names Home Assistant
