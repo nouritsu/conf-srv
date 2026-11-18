@@ -56,7 +56,7 @@
 
       virtualisation.oci-containers.containers.immich-server = {
         # the pc's cuda machine learning (conf-nixos) runs this same release
-        image = "ghcr.io/immich-app/immich-server:v3.3.6@sha256:e1981983b1c13f6024b57d72e7ecae3342eed1581201ab09fb248932d86c593a";
+        image = "ghcr.io/immich-app/immich-server:v3.4.2@sha256:fc880c1bf665b4aab1e74c15e56ab871225989cd546536e6b77e771869af06bd";
         dependsOn = ["immich-redis" "immich-db"];
         ports = ["127.0.0.1:${toString port}:2283"];
         # only the default: the admin settings' url list wins, and must hold just this too
