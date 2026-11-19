@@ -1,4 +1,4 @@
-let
+{den, ...}: let
   # off 3000: rathole binds the homelab's documenso there
   port = 3030;
 in {
@@ -8,11 +8,6 @@ in {
       subdomain = "mesh";
       public = true;
       inherit port;
-      extraConfig = ''
-        basicauth {
-          admin $2a$14$njq9OkElD8UtrqvenYTr0ejoDrR.lVPjx65KrKqGiHaWDFefoPZPq
-        }
-      '';
     };
 
     nixos = {
@@ -29,6 +24,17 @@ in {
       });
     in {
       sops.secrets."headplane/cookie-secret".owner = "headscale";
+      # from `headscale apikeys create`; oidc sessions reach headscale through it
+      sops.secrets."headplane/api-key".owner = "headscale";
+
+      # headscale's own google client, with mesh's callback among its redirect uris
+      sops.templates."headplane.env" = {
+        content = ''
+          HEADPLANE_OIDC__CLIENT_ID="${config.sops.placeholder."headscale/oicd-client-id"}"
+          HEADPLANE_OIDC__CLIENT_SECRET="${config.sops.placeholder."headscale/oicd-client-secret"}"
+        '';
+        restartUnits = ["headplane.service"];
+      };
 
       # no agent: since 0.7 it needs a headscale api key, not a pre-auth key
       services.headplane = {
@@ -37,14 +43,24 @@ in {
           server = {
             host = "127.0.0.1";
             inherit port;
+            base_url = "https://${den.lib.homelab.fqdn "mesh"}";
             cookie_secret_path = config.sops.secrets."headplane/cookie-secret".path;
           };
           headscale = {
             url = "http://127.0.0.1:${toString config.services.headscale.port}";
             config_path = "${headscale-config}";
+            api_key_path = config.sops.secrets."headplane/api-key".path;
+          };
+          # the first login becomes owner, later ones members without access
+          oidc = {
+            issuer = "https://accounts.google.com";
+            # overridden from headplane.env
+            client_id = "";
           };
         };
       };
+
+      systemd.services.headplane.serviceConfig.EnvironmentFile = config.sops.templates."headplane.env".path;
     };
   };
 }
