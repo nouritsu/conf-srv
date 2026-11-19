@@ -92,13 +92,23 @@ in {
       };
       systemd.services.pihole-ftl.serviceConfig.EnvironmentFile = config.sops.templates."pihole.env".path;
 
-      # unstable's setup script tolerates already-present lists; drop once nixos-raspberrypi's nixpkgs has it
-      systemd.services.pihole-ftl-setup.script = lib.mkForce (
-        import "${inputs.nixpkgs}/nixos/modules/services/networking/pihole-ftl-setup-script.nix" {
-          cfg = config.services.pihole-ftl;
-          inherit config lib pkgs;
-        }
-      );
+      systemd.services.pihole-ftl-setup = {
+        # unstable's setup script tolerates already-present lists; drop once nixos-raspberrypi's nixpkgs has it
+        script = lib.mkForce (
+          import "${inputs.nixpkgs}/nixos/modules/services/networking/pihole-ftl-setup-script.nix" {
+            cfg = config.services.pihole-ftl;
+            inherit config lib pkgs;
+          }
+        );
+
+        # a freshly restarted ftl answers the api before it can write gravity.db
+        serviceConfig = {
+          Restart = "on-failure";
+          RestartSec = "5s";
+        };
+        startLimitBurst = 3;
+        startLimitIntervalSec = 120;
+      };
     };
   };
 }
