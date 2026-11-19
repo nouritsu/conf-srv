@@ -15,11 +15,17 @@ in {
     nixos = {config, ...}: {
       sops.secrets."headscale/oicd-client-id" = {};
       sops.secrets."headscale/oicd-client-secret" = {};
+      # space-separated emails; without them any google account may register a node
+      sops.secrets."headscale/allowed-users" = {};
 
-      sops.templates."headscale-oidc.env".content = ''
-        HEADSCALE_OIDC_CLIENT_ID="${config.sops.placeholder."headscale/oicd-client-id"}"
-        HEADSCALE_OIDC_CLIENT_SECRET="${config.sops.placeholder."headscale/oicd-client-secret"}"
-      '';
+      sops.templates."headscale-oidc.env" = {
+        content = ''
+          HEADSCALE_OIDC_CLIENT_ID="${config.sops.placeholder."headscale/oicd-client-id"}"
+          HEADSCALE_OIDC_CLIENT_SECRET="${config.sops.placeholder."headscale/oicd-client-secret"}"
+          HEADSCALE_OIDC_ALLOWED_USERS="${config.sops.placeholder."headscale/allowed-users"}"
+        '';
+        restartUnits = ["headscale.service"];
+      };
 
       services.headscale = {
         enable = true;
