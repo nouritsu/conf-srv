@@ -69,10 +69,7 @@ in {
               ++ map (e: "${host-ip}   ${fqdn e.subdomain}") local;
           };
           dhcp.active = false;
-          webserver = {
-            # TODO: add api passwords
-            session.timeout = TWELVE_HOURS_SECONDS;
-          };
+          webserver.session.timeout = TWELVE_HOURS_SECONDS;
           ntp = {
             ipv4.active = false;
             ipv6.active = false;
@@ -84,6 +81,16 @@ in {
         enable = true;
         ports = [port];
       };
+
+      sops.secrets."pihole/password" = {};
+      # an FTLCONF_ setting is read-only in the web ui; ftl hashes the password itself
+      sops.templates."pihole.env" = {
+        content = ''
+          FTLCONF_webserver_api_password=${config.sops.placeholder."pihole/password"}
+        '';
+        restartUnits = ["pihole-ftl.service"];
+      };
+      systemd.services.pihole-ftl.serviceConfig.EnvironmentFile = config.sops.templates."pihole.env".path;
 
       # unstable's setup script tolerates already-present lists; drop once nixos-raspberrypi's nixpkgs has it
       systemd.services.pihole-ftl-setup.script = lib.mkForce (

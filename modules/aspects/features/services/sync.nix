@@ -160,6 +160,11 @@ in {
         {
           "syncthing/key" = {};
           "syncthing/cert" = {};
+          # syncthing-init hashes it into the gui's config as the syncthing user
+          "syncthing/gui-password" = {
+            owner = cfg.user;
+            restartUnits = ["syncthing-init.service"];
+          };
         }
         // lib.genAttrs (map (d: "syncthing/ids/${d}") devices) (_: {});
 
@@ -190,10 +195,10 @@ in {
         cert = config.sops.secrets."syncthing/cert".path;
         overrideDevices = false;
         overrideFolders = false;
+        guiPasswordFile = config.sops.secrets."syncthing/gui-password".path;
         settings = {
           gui = {
             user = "admin";
-            password = "$2y$05$E2gP6TBFqPr9Q3KK7aCFyeXoBhPntwbGbw6GRO9et1zr2LnPqaqAy";
             insecureSkipHostCheck = true;
           };
           options = {
