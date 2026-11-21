@@ -39,7 +39,7 @@ in {
       };
 
       virtualisation.oci-containers.containers.ariang = {
-        image = "p3terx/ariang:latest@sha256:7e2cda3ad1287b79c2dd8987d12698c19699527d688880183f644bbdaa207675";
+        image = "p3terx/ariang:latest@sha256:5e258716e459bb1ee4f61ab52462fa6c1862e94a9de2c53e1d1ff403a24a4ca8";
         ports = ["${toString web-port}:6880"];
         extraOptions = ["--log-driver=json-file" "--log-opt=max-size=1m"];
       };
