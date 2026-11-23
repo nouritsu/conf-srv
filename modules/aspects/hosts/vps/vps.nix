@@ -7,6 +7,8 @@
       caddy
       rathole.server
       beszel-agent
+      virtualization.podman
+      containers
 
       # services
       edge.www
@@ -15,7 +17,7 @@
       edge.headplane
       edge.cn-calsync
       edge.birthdays
-      edge.limesurvey
+      edge.heyform
     ];
 
     nixos = {

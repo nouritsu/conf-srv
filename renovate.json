@@ -23,6 +23,7 @@
       "matchPackageNames": [
         "postgres",
         "ghcr.io/immich-app/postgres",
+        "docker.io/library/mongo",
         "docker.io/valkey/valkey"
       ],
       "matchUpdateTypes": ["major", "minor", "patch"],
