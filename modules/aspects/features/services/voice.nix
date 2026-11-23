@@ -65,7 +65,7 @@
       '';
 
       virtualisation.oci-containers.containers.speech-to-phrase = {
-        image = "rhasspy/wyoming-speech-to-phrase:1.4.3@sha256:85580e14114b866f5ccd6ed856b0b97f634d8d0936ed7e31edc7822840327422";
+        image = "rhasspy/wyoming-speech-to-phrase:1.4.3@sha256:e532f0dbc6b21285c4c784212003865b9167041927328a767cb0beb1a0beaa20";
         environmentFiles = [config.sops.templates."speech-to-phrase.env".path];
         entrypoint = "bash";
         # Home Assistant answers on its websocket before it has loaded the
