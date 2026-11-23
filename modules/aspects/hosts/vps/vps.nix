@@ -15,6 +15,7 @@
       edge.headplane
       edge.cn-calsync
       edge.birthdays
+      edge.limesurvey
     ];
 
     nixos = {
