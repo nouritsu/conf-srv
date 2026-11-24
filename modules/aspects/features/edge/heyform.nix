@@ -9,7 +9,11 @@ in {
       inherit port;
     };
 
-    nixos = {config, ...}: {
+    nixos = {
+      config,
+      pkgs,
+      ...
+    }: {
       imports = [(den.lib.homelab.private-network "heyform" ["heyform" "heyform-mongo" "heyform-redis"])];
 
       sops.secrets."forms/session-key" = {};
@@ -28,6 +32,7 @@ in {
             APP_HOMEPAGE_URL = "https://${domain}";
             TRUST_PROXY = "1";
             APP_DISABLE_REGISTRATION = "true";
+            ENABLE_GOOGLE_FONTS = "false";
             # no mail is set up to deliver the codes
             VERIFY_USER_EMAIL = "false";
             MONGO_URI = "mongodb://heyform-mongo:27017/heyform";
@@ -46,6 +51,14 @@ in {
       };
 
       systemd.timers.restart-container-heyform-mongo.enable = false; # database
+
+      # maple mono for the forms' custom css
+      services.caddy.virtualHosts.${domain}.extraConfig = ''
+        handle_path /fonts/* {
+          root * ${pkgs.maple-mono.woff2}/share/fonts/woff2
+          file_server
+        }
+      '';
     };
   };
 }
