@@ -24,9 +24,8 @@ in {
       sops.secrets."sign/next-key" = {};
       sops.secrets."sign/next-secondary-key" = {};
       sops.secrets."sign/next-signing-pass" = {};
-      sops.secrets."mail/home-password" = {};
-      sops.secrets."mail/home-mail" = {};
-      sops.secrets."sign/sign-mail" = {};
+      sops.secrets."mail/address" = {};
+      sops.secrets."mail/token" = {};
       sops.secrets."sign/postgres-password" = {};
 
       sops.templates."documenso.env" = {
@@ -35,9 +34,9 @@ in {
           NEXT_PRIVATE_ENCRYPTION_KEY=${config.sops.placeholder."sign/next-key"}
           NEXT_PRIVATE_ENCRYPTION_SECONDARY_KEY=${config.sops.placeholder."sign/next-secondary-key"}
           NEXT_PRIVATE_SIGNING_PASSPHRASE=${config.sops.placeholder."sign/next-signing-pass"}
-          NEXT_PRIVATE_SMTP_USERNAME=${config.sops.placeholder."mail/home-mail"}
-          NEXT_PRIVATE_SMTP_FROM_ADDRESS=${config.sops.placeholder."sign/sign-mail"}
-          NEXT_PRIVATE_SMTP_PASSWORD=${config.sops.placeholder."mail/home-password"}
+          NEXT_PRIVATE_SMTP_USERNAME=${config.sops.placeholder."mail/address"}
+          NEXT_PRIVATE_SMTP_FROM_ADDRESS=${config.sops.placeholder."mail/address"}
+          NEXT_PRIVATE_SMTP_PASSWORD=${config.sops.placeholder."mail/token"}
           NEXT_PRIVATE_DATABASE_URL=postgresql://documenso:${config.sops.placeholder."sign/postgres-password"}@documenso-db:5432/documenso
           NEXT_PRIVATE_DIRECT_DATABASE_URL=postgresql://documenso:${config.sops.placeholder."sign/postgres-password"}@documenso-db:5432/documenso
         '';
@@ -56,7 +55,8 @@ in {
         environment = {
           NEXT_PRIVATE_SMTP_HOST = smtp.host;
           NEXT_PRIVATE_SMTP_PORT = toString smtp.port;
-          NEXT_PRIVATE_SMTP_SECURE = "true";
+          # starttls on 587, not implicit tls
+          NEXT_PRIVATE_SMTP_SECURE = "false";
           PORT = toString port;
           NEXTAUTH_URL = "https://${domain}";
           NEXT_PUBLIC_WEBAPP_URL = "https://${domain}";

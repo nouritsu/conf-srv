@@ -13,12 +13,8 @@
     # one provider behind both: postfix relays through it, and the services
     # that send their own mail talk to it directly
     smtp = {
-      host = "smtp.hostinger.com";
-      port = 465;
-    };
-    imap = {
-      host = "imap.hostinger.com";
-      port = 993;
+      host = "smtp.protonmail.ch";
+      port = 587;
     };
 
     fqdn = subdomain: "${subdomain}.${base-domain}";

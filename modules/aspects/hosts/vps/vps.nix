@@ -6,6 +6,7 @@
 
       caddy
       rathole.server
+      postfix
       beszel-agent
       virtualization.podman
       containers
