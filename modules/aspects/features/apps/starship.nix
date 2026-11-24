@@ -11,14 +11,8 @@
         package = pkgs.starship;
       }
 
-      ./_starship-settings.nix
-
-      # catppuccin mocha palette, so colour names resolve to it, not ANSI
-      {
-        settings =
-          {palette = "catppuccin_mocha";}
-          // lib.importTOML "${inputs.catppuccin-starship}/themes/mocha.toml";
-      }
+      inputs.conf-nixos.nixosModules.wstarship-settings
+      inputs.conf-nixos.nixosModules.wstarship-theme
 
       # host stats, time and battery, picked by fish over ssh
       ({config, ...}: {

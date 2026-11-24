@@ -42,16 +42,24 @@
       url = "github:BirdeeHub/nix-wrapper-modules";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+    # the pc's config, for starship's settings and theme
+    conf-nixos = {
+      url = "git+https://codeberg.org/nouritsu/nixos";
+      inputs = {
+        nixpkgs.follows = "nixpkgs";
+        flake-parts.follows = "flake-parts";
+        import-tree.follows = "import-tree";
+        den.follows = "den";
+        treefmt-nix.follows = "treefmt-nix";
+        wrappers.follows = "wrappers";
+      };
+    };
 
     # Theming
     nix-colors.url = "github:misterio77/nix-colors";
-    # parsed at eval time; no catppuccin/nix for three theme files
+    # parsed at eval time; no catppuccin/nix for two theme files
     catppuccin-btop = {
       url = "github:catppuccin/btop";
-      flake = false;
-    };
-    catppuccin-starship = {
-      url = "github:catppuccin/starship";
       flake = false;
     };
     catppuccin-television = {
