@@ -15,7 +15,7 @@
 
     nixos = {
       virtualisation.oci-containers.containers.jellyfin = {
-        image = "lscr.io/linuxserver/jellyfin:latest@sha256:4212ca390fbc6bd5002048d2d2ce2b8a5b1ad278ec4cbabe6519869117404308";
+        image = "lscr.io/linuxserver/jellyfin:latest@sha256:1c60c32d1de1529cc58ea6c7879dd47f89d0d88082b085a66214243de3150b5c";
         ports = ["${toString port}:8096"];
         extraOptions = ["--device=/dev/dri:/dev/dri"];
         volumes = ["/data/jellyfin:/config" "/media/media:/media:ro"];
