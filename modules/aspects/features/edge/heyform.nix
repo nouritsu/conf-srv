@@ -1,4 +1,5 @@
 {den, ...}: let
+  inherit (den.lib.homelab) smtp;
   domain = den.lib.homelab.fqdn "forms";
   port = 3040;
 in {
@@ -18,9 +19,14 @@ in {
 
       sops.secrets."forms/session-key" = {};
       sops.secrets."forms/form-encryption-key" = {};
+      sops.secrets."mail/address" = {};
+      sops.secrets."mail/token" = {};
       sops.templates."heyform.env".content = ''
         SESSION_KEY=${config.sops.placeholder."forms/session-key"}
         FORM_ENCRYPTION_KEY=${config.sops.placeholder."forms/form-encryption-key"}
+        SMTP_USER=${config.sops.placeholder."mail/address"}
+        SMTP_PASSWORD=${config.sops.placeholder."mail/token"}
+        SMTP_FROM=HeyForm <${config.sops.placeholder."mail/address"}>
       '';
 
       virtualisation.oci-containers.containers = {
@@ -33,8 +39,10 @@ in {
             TRUST_PROXY = "1";
             APP_DISABLE_REGISTRATION = "true";
             ENABLE_GOOGLE_FONTS = "false";
-            # no mail is set up to deliver the codes
-            VERIFY_USER_EMAIL = "false";
+            SMTP_HOST = smtp.host;
+            SMTP_PORT = toString smtp.port;
+            # starttls on 587, not implicit tls
+            SMTP_SECURE = "false";
             MONGO_URI = "mongodb://heyform-mongo:27017/heyform";
             REDIS_HOST = "heyform-redis";
           };
