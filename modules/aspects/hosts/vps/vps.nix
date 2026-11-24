@@ -18,6 +18,7 @@
       edge.headplane
       edge.cn-calsync
       edge.birthdays
+      edge.presence
       edge.heyform
     ];
 

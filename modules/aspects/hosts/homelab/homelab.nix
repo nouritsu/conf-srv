@@ -37,6 +37,7 @@
       services.mousehole
       services.sabnzbd
       services.radicale
+      services.presence
       services.atuin
       services.immich
     ];
