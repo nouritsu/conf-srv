@@ -20,7 +20,6 @@
       services.gatus
       services.copyparty
       services.bindery
-      services.bazarr
       services.scrutiny
       services.paperless
       services.homeassistant

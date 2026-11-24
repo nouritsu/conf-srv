@@ -9,19 +9,10 @@
 #
 #   nix eval .#nixosConfigurations.check-all.config.system.build.toplevel.drvPath
 {den, ...}: {
-  den.aspects.check-all = {
-    includes = with den.aspects; [
-      homelab
-      services._
-    ];
-
-    # services.wg-easy and services.tailscale collide on this sysctl; the
-    # homelab host brings tailscale in through `homelab` above, so pin it here
-    # rather than dropping a service from the check
-    nixos = {lib, ...}: {
-      boot.kernel.sysctl."net.ipv4.ip_forward" = lib.mkForce 1;
-    };
-  };
+  den.aspects.check-all.includes = with den.aspects; [
+    homelab
+    services._
+  ];
 
   # the same for games, on x86 where their images run; caddy is for valheim-files
   den.aspects.check-games.includes = with den.aspects; [
