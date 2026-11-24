@@ -55,7 +55,7 @@ in {
         };
 
       virtualisation.oci-containers.containers.valheim-files = {
-        image = "copyparty/ac:latest@sha256:b2054d65e05daa8982ca17c26b12b74315c0ce586a03ff9018a59c80731b9e19";
+        image = "copyparty/ac:latest@sha256:75c58da287339fc4fd93974b4f19b72a2e7efe5431edf405b4b3295f0662a711";
 
         ports = ["${toString port}:3923"];
 
