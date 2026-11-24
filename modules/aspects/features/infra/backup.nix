@@ -48,6 +48,7 @@
     systemd.services.backup-snapshot = {
       description = "Read-only btrfs snapshots for the backup";
       serviceConfig.Type = "oneshot";
+      onFailure = ["notify-failure@%n.service"];
       path = [pkgs.btrfs-progs];
       script =
         lib.concatMapStrings (m: ''
