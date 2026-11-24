@@ -10,12 +10,12 @@
     };
 
     nixos = {
-      # nouritsu/nouritsu's github actions rsync the built site in as this user
+      # nouritsu/nouritsu's codeberg ci (nix run .#deploy) rsyncs the built site in as this user
       users.users.website-deployer = {
         isNormalUser = true;
-        description = "GitHub Actions Website Deployer";
+        description = "Codeberg CI Website Deployer";
         openssh.authorizedKeys.keys = [
-          "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGSVsYy43rdXqW5r9nris53VGBuGKkhmdooO4/IuqCnw website-deployer"
+          "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIMjDhZkazCNhJj2szvv3SLUd7a6sJrevLFbOOvhSoHYL nouritsu-website-deploy"
         ];
       };
 
