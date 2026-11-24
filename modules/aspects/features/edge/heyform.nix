@@ -47,7 +47,7 @@ in {
           volumes = ["heyform-mongo:/data/db"];
         };
 
-        heyform-redis.image = "docker.io/valkey/valkey:9@sha256:418652cfb58ef879d4978c33553735d7147016032d5aefaa14c828e611eb9dfd";
+        heyform-redis.image = "docker.io/valkey/valkey:9@sha256:1c2b25b09f354c66fe994733acdf12fcfd4bdf6f3bd92b88a93a70378d884056";
       };
 
       systemd.timers.restart-container-heyform-mongo.enable = false; # database
