@@ -1,5 +1,8 @@
 {den, ...}: let
   inherit (den.lib.policy) pipe;
+
+  # public half of the server's rathole/noise-private-key, from `rathole --genkey`
+  noise-public-key = "iY8zLgkTADkZ1UEekEL1svsdJh2V03Yg7YA3TyfHvCE=";
 in {
   # a client tunnels its own public `endpoint`s; a server publishes its `tunnel` quirk
   den.aspects.rathole.nixos = {
@@ -27,6 +30,7 @@ in {
   in {
     sops.secrets."rathole/token".sopsFile = den.lib.homelab.shared-secrets;
     sops.secrets."rathole/remote-addr" = lib.mkIf client {};
+    sops.secrets."rathole/noise-private-key" = lib.mkIf (!client) {};
 
     services.rathole = {
       enable = true;
@@ -34,18 +38,32 @@ in {
       credentialsFile = config.sops.templates."rathole-credentials.toml".path;
     };
 
-    # both ends use the service's own port; caddy on the server proxies to it
-    services.rathole.settings.${role}.services = lib.listToAttrs (map (e:
-      lib.nameValuePair e.subdomain {
-        ${addr-key} = "127.0.0.1:${toString e.port}";
-      })
-    tunnelled);
+    services.rathole.settings.${role} = {
+      # encrypted across the internet, and the client only talks to the server holding the key
+      transport =
+        {type = "noise";}
+        // lib.optionalAttrs client {noise.remote_public_key = noise-public-key;};
+
+      # both ends use the service's own port; caddy on the server proxies to it
+      services = lib.listToAttrs (map (e:
+        lib.nameValuePair e.subdomain {
+          ${addr-key} = "127.0.0.1:${toString e.port}";
+        })
+      tunnelled);
+    };
 
     sops.templates."rathole-credentials.toml".content =
-      lib.optionalString client ''
-        [${role}]
-        remote_addr = "${config.sops.placeholder."rathole/remote-addr"}"
-      ''
+      (
+        if client
+        then ''
+          [${role}]
+          remote_addr = "${config.sops.placeholder."rathole/remote-addr"}"
+        ''
+        else ''
+          [${role}.transport.noise]
+          local_private_key = "${config.sops.placeholder."rathole/noise-private-key"}"
+        ''
+      )
       + lib.concatMapStrings (e: ''
 
         [${role}.services.${e.subdomain}]
